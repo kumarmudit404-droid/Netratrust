@@ -32,8 +32,8 @@ B (Frontend), C (ML & Evaluation).
 | T-11 | Fit thresholds on **calibration split only**; write `thresholds.yaml` | C | todo | T-10 |
 | T-12 | Unit-test remaining metrics functions | C | todo | T-01 |
 | T-13 | React PWA scaffold + shell: Vite/TS, Tailwind tokens, shadcn/ui, TanStack Query, vite-plugin-pwa, `<TopNav/>` + five routes, typed API client (mock responder) | B | done | Node (installed) |
-| T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | todo | T-13 |
-| T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | todo | T-13, T-10 |
+| T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | done | T-13 |
+| T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | T-07 |
 | T-17 | Ledger route: verify + checkpoint display | B | todo | T-06 |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |

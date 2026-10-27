@@ -1,4 +1,5 @@
-import { defineConfig } from "vite"
+// vitest/config re-exports vite's defineConfig with the `test` block typed.
+import { defineConfig } from "vitest/config"
 import react from "@vitejs/plugin-react"
 import { VitePWA } from "vite-plugin-pwa"
 import { fileURLToPath, URL } from "node:url"
@@ -40,6 +41,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
+  test: {
+    // Node environment: no DOM library is in Lane B's stack, so these are
+    // logic and import-time tests only.
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
   server: {
     port: 5173,

@@ -169,3 +169,44 @@
   agreed stack. Raster PWA icons are **TBD — verify**. Dark-theme status hues remain
   **TBD — verify**. `recharts@2.15.4` warns that 2.x is no longer active and suggests
   v3; left on 2.x and not bumped.
+
+### 2026-10-27 — Lane B — T-14/T-15: Capture + Grade/Abstain routes built, with the TopNav shell
+- what changed: all under `netra/ui`. New `src/lib/clinical.ts` — `REFER_GRADES`
+  `[2,3,4]` and `CONFORMAL_CONFIDENCE` 0.9 mirroring `config/thresholds.yaml`, plus
+  `spansClinicalActions()` implementing the SPEC §3 abstention rule (spans refer vs
+  do-not-refer, **not** set size). New `src/lib/sha256.ts` — the captured image is
+  hashed with `crypto.subtle` in the browser and only the hex leaves the component.
+  New `src/lib/gateSim.ts` — seven explicit operator-chosen scenarios standing in for
+  Lane C's on-device gate. New `src/state/encounter.tsx` — in-memory context for the
+  case on screen (no image bytes, no cached clinical state). New
+  `src/components/VerdictPanel.tsx` and `PredictionSet.tsx`. `routes/Capture.tsx` and
+  `routes/Grade.tsx` built out; `Referrals`, `Sites`, `Ledger` left as routed stubs.
+  `main.tsx` wraps the app in `EncounterProvider`. Added vitest config block to
+  `vite.config.ts`. Three test files: `formatRate.test.ts`, `clinical.test.ts`,
+  `routes/routes.smoke.test.ts`.
+- verified: `npm run build` and `npm test` both green — **23 tests, 3 files**. Capture:
+  a `reject` renders the "No result — take again" headline, the sentence "This is NOT a
+  negative result — the patient has not been screened yet", the reason-code explanation,
+  "Take another image" as the primary action, and **no grade block, no prediction set and
+  no referral control**; the quieter "Cannot retake" path posts
+  `prediction_set: null`. Grade: a reject or null prediction set short-circuits to a
+  "no result to show" panel before any grading UI; `{1,2}` and `{0,3}` abstain with "A
+  doctor should check this" while `{2,3,4}` does not, which `clinical.test.ts` pins in
+  both directions. Confirmed in the built CSS that every token class actually emits
+  (`text-abstain`, `border-l-abstain`, `--abstain: #5b4bc4` …) — Tailwind drops unknown
+  classes silently, so this was checked rather than assumed. Four defects found and
+  fixed during the step: a `style={undefined}` left in `Grade.tsx`; the vitest `test`
+  block turned `npm run build` **red** because Vite's `defineConfig` does not type it
+  (now imported from `vitest/config`); and in the earlier commit work two
+  `.tsbuildinfo` build artifacts had been committed and are now gitignored and untracked.
+- unverified / TBD: **no screen has been visually rendered or interacted with.** No DOM
+  test library is in Lane B's stack by agreement, so `routes.smoke.test.ts` asserts only
+  that modules import and export a component — it cannot assert layout, contrast in
+  situ, focus order or that the Reject screen reads as intended to a human. A browser
+  pass on `npm run dev` is still owed. The app has still never run against the real API
+  (`VITE_USE_MOCK=0` untested, **CORS still a Lane A task**). `gateSim.ts` is a UI driver,
+  not a model: no number it produces is a measurement, and it must be deleted when Lane C
+  exposes a real gate. `clinical.ts` duplicates `config/thresholds.yaml` values the front
+  end cannot read at runtime — flagged `TODO(Lane A)` to serve them from the API.
+  `SIM_MODEL_VERSION` is a placeholder, not a trained checkpoint. The abstention queue
+  itself (a list of abstained cases) is not built — only the single-case Abstain view.
