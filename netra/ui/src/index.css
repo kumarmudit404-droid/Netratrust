@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colour tokens from design.md section 2. Contrast ratios are measured with the
+   WCAG 2.1 relative-luminance formula, against --bg unless stated.
+     --text        17.74:1    --text-muted  7.56:1
+     --usable       5.02:1    --borderline  4.87:1
+     --reject       6.57:1    --abstain     6.46:1
+     --border-subtle 1.47:1  (decorative - borders/fills only, never text)
+   --borderline on --surface is 4.49:1, a hair under AA for normal text, so
+   status text is not placed on --surface below large-text size. */
+:root {
+  --bg: #ffffff;
+  --surface: #f4f6f8;
+  --text: #111827;
+  --text-muted: #4b5563;
+  --usable: #1b7f4b;
+  --borderline: #9a6700;
+  --reject: #b42318;
+  --abstain: #5b4bc4;
+  --border-subtle: #d0d5dd;
+}
+
+/* Dark theme: --text holds AAA (16.27:1 on --bg). The light status hues do NOT
+   survive the flip - measured on #0B0F14 they are usable 3.83, borderline 3.95,
+   reject 2.92, abstain 2.97, all below AA - so they must be lightened.
+   Replacement dark hues: TBD - verify before shipping dark mode. */
+:root[data-theme="dark"] {
+  --bg: #0b0f14;
+  --surface: #161b22;
+  --text: #e6edf3;
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+  }
+  body {
+    @apply bg-bg text-text font-sans text-body antialiased;
+  }
+  /* Focus is never removed. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-text ring-offset-2 ring-offset-bg;
+  }
+  /* Numbers in tables align column-wise. */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* All motion respects the user's reduced-motion preference (design.md s8). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

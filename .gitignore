@@ -4,3 +4,9 @@ data/*
 !data/splits/
 __pycache__/
 *.db
+
+# --- front end (Lane B) ---
+netra/ui/node_modules/
+netra/ui/dist/
+netra/ui/dev-dist/
+netra/ui/*.tsbuildinfo

@@ -1,0 +1,9 @@
+# Python tooling config. Front end lives in netra/ui and is NOT Python:
+# it is excluded from ruff and pytest. Dependency pins stay in requirements.txt.
+
+[tool.ruff]
+extend-exclude = ["netra/ui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["netra/ui", "netra/ui/node_modules", ".venv", "data", "keys"]
