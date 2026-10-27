@@ -1,0 +1,10 @@
+# Frozen on CALIBRATION split only. Never tune on test. Changes require a ledger note + commit.
+quality_gate:
+  usable_min_p: 0.70
+  reject_max_p: 0.30   # between = borderline -> recapture advised
+dr:
+  conformal_confidence: 0.90
+  refer_grades: [2, 3, 4]   # moderate NPDR or worse
+  abstain_if_set_spans_actions: true
+sites:
+  min_n_for_rate: 30

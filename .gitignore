@@ -1,0 +1,6 @@
+.env
+keys/
+data/*
+!data/splits/
+__pycache__/
+*.db
