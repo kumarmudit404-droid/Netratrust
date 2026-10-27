@@ -32,8 +32,8 @@ rfc8785==0.1.4
 httpx==0.28.1
 
 # --- UI ---
-streamlit==1.66.1
-plotly==7.1.0
+# Front end is a Vite + React + TS PWA; deps are pinned in netra/ui/package.json.
+# streamlit / plotly removed 2026-10-27 with the SPEC.md section 7 amendment.
 
 # --- explainability (optional, Friday) ---
 # package is `grad-cam`, import is `pytorch_grad_cam`

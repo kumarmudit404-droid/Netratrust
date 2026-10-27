@@ -92,15 +92,18 @@ A site must pass a local audit before its grades count. Stores gradability rate,
 gate-vs-human agreement, grade distribution, pinned model version, drift flag.
 
 ### 7. UI  (owner: Lane B — Frontend)
-Streamlit 1.66.1 + Plotly 7.1.0, `st.navigation(position="top")`.
+Custom front end in `netra/ui`: Vite + React + TypeScript PWA — Tailwind CSS,
+shadcn/ui, TanStack Query, Recharts, vite-plugin-pwa, Framer Motion. Front-end
+dependencies are pinned in `netra/ui/package.json`, not `requirements.txt`.
+Amended 2026-10-27 by agreement; superseded Streamlit 1.66.1 + Plotly 7.1.0.
 Five views: capture + gate verdict; abstention queue; performance dashboard;
 ledger verification + tamper demo; offline queue indicator.
 
 - Per-site view: forest plot of Wilson intervals against the pooled line.
   Doubles as the drift monitor. Avoid violins — KDE invents structure at
   realistic per-site n.
-- Funnel: `go.Funnel` with `textinfo="value+percent previous"`.
-- Live panels: `st.fragment(run_every=...)` polling the API.
+- Funnel: each stage labelled with its value and percent of the previous stage.
+- Live panels: poll the API on an interval.
 
 ### 8. Explicitly excluded
 No LLM. No RAG. No federated learning. No blockchain. No differential privacy.

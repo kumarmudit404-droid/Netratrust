@@ -9,7 +9,7 @@ Read `SPEC.md` before writing code. It is the contract; this file is conventions
 - Test: `pytest -q`
 - Lint: `ruff check . && ruff format --check .`
 - API: `uvicorn netra.api.main:app --reload --port 8000`
-- UI: `streamlit run netra/ui/app.py`
+- UI: `cd netra/ui && npm run dev`
 - Verify ledger: `python -m netra.ledger.verify`
 
 ## Ownership (do not edit outside your lane)

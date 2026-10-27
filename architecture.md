@@ -28,9 +28,18 @@ Versions are frozen in `requirements.txt`; do not bump. Python **3.12+**.
 | DB | sqlmodel / sqlalchemy | 0.0.48 / 2.1.6 |
 | Integrity | cryptography | 50.0.2 |
 | Integrity | rfc8785 | 0.1.4 |
-| UI | streamlit | 1.66.1 |
-| UI | plotly | 7.1.0 |
+| UI (Lane B) | vite + react + typescript | see `netra/ui/package.json` |
+| UI (Lane B) | tailwindcss + shadcn/ui | see `netra/ui/package.json` |
+| UI (Lane B) | @tanstack/react-query | see `netra/ui/package.json` |
+| UI (Lane B) | recharts (dashboards) | see `netra/ui/package.json` |
+| UI (Lane B) | vite-plugin-pwa (installable + offline) | see `netra/ui/package.json` |
+| UI (Lane B) | framer-motion | see `netra/ui/package.json` |
 | Explain | grad-cam | 1.5.7 |
+
+Front-end dependencies are pinned in `netra/ui/package.json`, **not** in
+`requirements.txt`. `requirements.txt` still pins `streamlit==1.66.1` and
+`plotly==7.1.0`; removing them is a separate agreed change (that file changes only by
+agreement, in its own commit) and is **not** a Lane B edit.
 
 **Models:** quality gate = QuickQual (frozen `densenet121.tv_in1k` @512px + SVM),
 fallback QuickQual-MEME; DR backbone = `convnext_tiny.in12k_ft_in1k` @512px;
@@ -48,7 +57,13 @@ netratrust/
 │   ├── api/                # Lane A — FastAPI app, routes
 │   ├── ledger/             # Lane A — hash chain, Ed25519, verify
 │   ├── db/                 # Lane A — SQLModel tables, triggers
-│   ├── ui/                 # Lane B — Streamlit app
+│   ├── ui/                 # Lane B — Vite + React + TS PWA (own package.json)
+│   │   ├── package.json    #          front-end deps live here, NOT requirements.txt
+│   │   ├── src/
+│   │   │   ├── components/ #          StatusBadge, VerdictPanel, TopNav, ui/ (shadcn)
+│   │   │   ├── routes/     #          capture, grade, referrals, sites, ledger
+│   │   │   └── lib/        #          typed API client, formatRate
+│   │   └── vite.config.ts  #          vite-plugin-pwa (installable + offline)
 │   ├── models/             # Lane C — quality gate, DR classifier
 │   └── eval/               # Lane C — metrics.py (single source)
 ├── notebooks/              # Lane C — training (Kaggle/T4)
@@ -95,6 +110,11 @@ Conventions (from `CLAUDE.md`): handlers are **sync `def`** (SQLite is blocking)
 use a `lifespan=` context manager; every decision is appended to the ledger **before**
 the response is returned. Sync is at-least-once with server-side dedup on an
 Idempotency-Key header.
+
+The front end is served from a separate origin in local development (Vite dev server on
+`:5173`, API on `:8000`), so **the API needs CORS enabled for local dev** — a **Lane A**
+task, not implemented by Lane B. No endpoint shape changes; the `Idempotency-Key`
+request header must be permitted.
 
 ## 5. Referral state machine
 ```
