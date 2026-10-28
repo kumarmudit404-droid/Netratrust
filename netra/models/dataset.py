@@ -28,6 +28,11 @@ DEFAULT_SPLITS = REPO_ROOT / "data" / "splits"
 DEFAULT_MANIFEST = REPO_ROOT / "data" / "manifest.csv"
 VALID_SPLITS = ("train", "calib", "test")
 
+#: Tried in order for a given image id. The APTOS mirrors disagree: the
+#: competition archive ships `.png`, several resized mirrors ship `.jpg`.
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg")
+SKIP_DIRS = {"__pycache__", ".ipynb_checkpoints", "node_modules", ".git"}
+
 
 @dataclass(frozen=True)
 class Example:
@@ -56,6 +61,55 @@ def read_split(name: str, splits_dir: pathlib.Path | None = None) -> list[str]:
     if not path.exists():
         raise SplitNotAvailable(f"no frozen split at {path}")
     return json.loads(path.read_text())
+
+
+def find_images_dir(
+    image_ids: list[str],
+    search_root: pathlib.Path,
+    min_hits: int = 20,
+    max_depth: int = 6,
+) -> list[tuple[pathlib.Path, int]]:
+    """Directories under `search_root` holding files named for these ids.
+
+    The Kaggle mount point for APTOS depends on which dataset was attached,
+    and the mirrors lay out differently (`train_images/train_images/`,
+    `images/`, a flat root). Rather than hardcode one and fail with
+    `retained_fraction: 0.0` after a long walk, the directory is DISCOVERED by
+    asking which one actually contains the ids in the frozen splits, and the
+    candidates are returned with their hit counts so a human can see the
+    choice. Most hits first.
+    """
+    wanted = set(image_ids)
+    if not wanted:
+        return []
+    search_root = pathlib.Path(search_root)
+    if not search_root.exists():
+        return []
+
+    root_depth = len(search_root.parts)
+    hits: dict[pathlib.Path, int] = {}
+    for path in search_root.rglob("*"):
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        if any(part in SKIP_DIRS for part in path.parts):
+            continue
+        if len(path.parts) - root_depth > max_depth:
+            continue
+        if path.stem in wanted:
+            hits[path.parent] = hits.get(path.parent, 0) + 1
+    return sorted(
+        ((d, n) for d, n in hits.items() if n >= min_hits),
+        key=lambda pair: (-pair[1], str(pair[0])),
+    )
+
+
+def resolve_image_path(images_dir: pathlib.Path, image_id: str) -> pathlib.Path | None:
+    """The first existing `<images_dir>/<image_id><ext>`, or None."""
+    for extension in IMAGE_EXTENSIONS:
+        candidate = images_dir / f"{image_id}{extension}"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def collect(
@@ -90,8 +144,8 @@ def collect(
         if row is None:
             missing_row += 1
             continue
-        path = images_dir / f"{image_id}.png"
-        if not path.exists():
+        path = resolve_image_path(images_dir, image_id)
+        if path is None:
             missing_file += 1
             continue
         examples.append(
