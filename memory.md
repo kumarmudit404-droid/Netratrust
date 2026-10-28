@@ -1200,3 +1200,37 @@ deployed, nothing pushed.
   would be rejected for a reason that has nothing to do with quality.
 - verified: **288 tests pass** (266 before, +22). ruff and ruff-format clean on this
   lane's files, checked as their own commands this time.
+
+### 2026-10-28 — Lane C — T-07 inference entrypoint (`netra/models/infer.py`)
+- what changed: `netra/models/infer.py`, `tests/test_infer.py` (15 tests). This is what
+  the API will call in place of Lane B's simulated `gateSim.ts`.
+- it returns the model-side fields of the frozen `POST /v1/encounters` body —
+  `image_sha256, gate_verdict, cause, prediction_set, model_version, site_id,
+  device_seq` — and `as_encounter_body()` is **validated against Lane A's own
+  `EncounterRequest` pydantic model** in a test, so the shape cannot drift from the
+  contract. The image hash is computed here; the pixels never leave (SPEC.md).
+- **four distinct not-available states, each reported as itself rather than guessed:**
+  1. gate head missing → `quality_verdict: null`, `model_version: "unloaded"`, and
+     `as_encounter_body()` **raises** rather than posting a half-formed encounter
+     (Lane A's `gate_verdict` is not nullable).
+  2. gate says reject → verdict `reject`, no grade, no prediction set, and
+     `abstain: false` — a reject is "no result", NOT an abstention, because nothing was
+     graded. Lane A returns 422 for a reject carrying a prediction set, so the body
+     sends `null`; asserted.
+  3. admitted but no DR checkpoint → real verdict kept (the gate genuinely ran and that
+     is a recordable fact), grade absent, `model_version: "unloaded"`.
+  4. graded but **no conformal calibration** → **abstains**. An argmax is not a
+     prediction set, and a prediction set is what this project reports, so it refuses to
+     quietly emit a top-1 grade.
+- `model_version` is `"unloaded"` unless **both** halves are real, and is deliberately
+  not a partial string: a caller writing it into a ledger needs to know the whole
+  pipeline was real, not half of it. Untrained weights keep their `:untrained` suffix all
+  the way through.
+- **driven for real on an actual APTOS image**, not only in tests. With nothing loaded:
+  `quality_verdict: null`, `model_version: "unloaded"`, note "quality gate unavailable",
+  and the CLI prints that no grade was produced and none was invented. With the
+  synthetic gate head loaded and the real pretrained densenet121: `quality_verdict:
+  "usable"`, `quality_score_milli: 961`, grade still `null` and `model_version` still
+  `"unloaded"` because no DR checkpoint exists. That is the correct behaviour end to end.
+- verified: **303 tests pass** (288 before, +15), ruff and ruff-format clean, each run as
+  its own command.
