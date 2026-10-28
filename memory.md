@@ -906,3 +906,46 @@ deployed, nothing pushed.
   string** under vitest (the CSS pipeline intercepts it). Resolved with a
   `/// <reference types="node" />` scoped to that one file, rather than adding `"node"`
   to tsconfig — which would let browser code import `node:fs` and still type-check.
+
+### 2026-10-28 — Lane C — Preflight, real APTOS labels, frozen splits
+- what changed: `scripts/build_manifest.py`, `scripts/fetch_aptos_images.py`,
+  `tests/test_splits.py` (10 tests), and the **frozen splits** in `data/splits/`.
+- data acquisition, actual result: `data/` was empty and the `kaggle` python package is
+  not installed, but a `kaggle` EXECUTABLE is on PATH (from the system 3.13) and **its
+  credentials work**. So this did not fall back to synthetic. `kaggle` is deliberately
+  NOT added to `requirements.txt`: it is invoked as a subprocess, never imported, and
+  rules.md §1 governs imports.
+- **what is real and what is not.** Real: 366 APTOS images with real 5-class labels from
+  `mariaherrerot/aptos2019` (`test.csv`, sha256 `ddb19e46…`, 6879 bytes), distribution
+  `{0:199, 1:30, 2:87, 3:17, 4:33}`. Frozen splits from it: **train 219 / calib 75 /
+  test 72**, seed 20261027, manifest sha256 `3f18c901…`. NOT real: the full APTOS corpus
+  (3662 train images) was not downloaded — the mirror is 8.6 GiB, the backbone trains on
+  Kaggle, and per-file fetching gets what a CPU box can actually use. EyeQ was not
+  obtained at all: its labels reference **EyePACS** images, which the brief forbids
+  downloading (~89 GiB), so the quality gate has no real quality-labelled corpus here.
+- **APTOS publishes no patient identifier.** It ships `id_code, diagnosis` only, so
+  `build_manifest.py` sets `patient_id = image_id` and the patient-level guarantee in
+  `.claude/rules/ml.md` is **VACUOUS for this corpus** — `n_patients == n_images` in
+  `meta.json` for that reason, not because the splitter failed. If two APTOS rows are
+  one patient's two eyes they can land in different folds and nothing here would catch
+  it. Recorded loudly because it is invisible in results.
+  `TODO(review)`: `make_splits.py`'s docstring and ml.md both claim a source corpus is
+  "kept whole inside a single fold", but the code buckets on `patient_id` alone and
+  never reads `source`. With one corpus this is moot. It was NOT changed: altering the
+  bucketing would re-pick the splits, which rules.md §6 makes a stop-and-ask.
+- verified: **142 tests pass** (132 before, +10), ruff clean on `scripts/` and the new
+  test. The split invariants are tested rather than asserted in prose: three images per
+  patient always land together; splits are disjoint AND cover every input image (nothing
+  lost or invented); the hash bucketing is deterministic; **adding 50 new patients moves
+  no existing image** (the reason a hash beats a shuffle — a shuffle silently
+  recontaminates any threshold already fitted on the old calibration fold); a different
+  seed gives a different split (guards a seed that is read but ignored); fractions land
+  within 3 points at n=2000; a manifest missing a column is refused. The committed
+  splits are also checked directly for disjointness and for a meta that records the seed
+  and the manifest hash, with the manifest-hash check skipped where `data/manifest.csv`
+  is absent (it is gitignored).
+- `fetch_aptos_images.py` **refuses to fetch the test split** — the test split is touched
+  once, at the end — and prints the retained fraction, per ml.md. Two real quirks found
+  by running it: the CLI mirrors the remote directory under `-p` (payload lands at
+  `<out>/test_images/test_images/<id>.png.zip`, not `<out>/<id>.png`) and it zips
+  single-file downloads. The first version silently retained 0/4 because of it.

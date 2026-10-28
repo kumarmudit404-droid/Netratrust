@@ -1,0 +1,20 @@
+{
+  "seed": 20261027,
+  "fractions": {
+    "train": 0.6,
+    "calib": 0.2,
+    "test": 0.2
+  },
+  "method": "sha256 patient-level hash bucketing",
+  "n_images": {
+    "train": 219,
+    "test": 72,
+    "calib": 75
+  },
+  "n_patients": {
+    "train": 219,
+    "test": 72,
+    "calib": 75
+  },
+  "manifest_sha256": "3f18c901c834969acb63281b366a782c83d557c9abd849e969b165d7a0dc8ce7"
+}
