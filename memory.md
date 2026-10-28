@@ -691,3 +691,35 @@
   "an outside party can prove a rewrite" claim is made in prose on the card and is not
   something this screen demonstrates. Verifying it in the browser would need the Ed25519
   public key and WebCrypto, and is not in the frozen contract.
+
+### 2026-10-28 — Lane B — Real-API smoke: the typed client against live Lane A
+- what changed: `src/lib/api/live.test.ts` — 10 integration tests that drive the REAL
+  typed client against a running Lane A API. **Skipped unless `NETRA_LIVE=1`**, so
+  `npm test` never depends on a server (verified: a normal run reports
+  `9 passed | 1 skipped`, `80 passed | 10 skipped`). Run with
+  `NETRA_LIVE=1 VITE_API_BASE=http://127.0.0.1:8000 npx vitest run src/lib/api/live.test.ts`.
+- verified: **10/10 pass against live uvicorn on :8000**, with `VITE_API_BASE` set so
+  the requests are **cross-origin** and therefore actually exercise Lane A's CORS rather
+  than the same-origin Vite proxy. Confirmed through the client, not curl:
+  `POST /v1/encounters` returns `encounter_id` + a numeric `ledger_idx` with exactly the
+  two frozen fields; a **retry with the same Idempotency-Key returns the identical
+  response** (server-side dedup, so the header added earlier today demonstrably works
+  over the wire); a reject carrying a prediction set is **422**; a grade-4 encounter
+  issues a referral and advances `issued → contact_attempted`; an abstention `{0,3}`
+  **cannot be referred** (422); `verify` returns `{ok:true, first_bad_index:null}`;
+  `checkpoint` returns the frozen five with a 64-hex head hash and 128-hex signature;
+  `metrics/sites` and `sites/{id}/status` send `{k,n,ci}` with `ci[0] <= ci[1]` and no
+  bare rate; `queue/depth` sends `{key,endpoint,status,created_at}` attempts.
+  This is what the mock cannot prove: a green mock suite only shows the mock agrees
+  with itself.
+- **the T-17 tamper transition was driven end to end through Lane B's client.** Before:
+  the client's `verifyLedger()` returned ok:true. Then Lane A's CLI was run against the
+  same database — `python -m netra.ledger.tamper --seq 2` — and with **no server restart**
+  the client observed `{"ok":false,"first_bad_index":2}`. `ledgerState.verifyDisplay`
+  maps exactly that to `{kind:"tampered", firstBadIndex:2}` → headline "Tampering
+  detected at entry 2", which is unit-tested. So every link in the demo is verified
+  except the pixels. No Lane A file was written; the CLI was only invoked.
+- unverified / TBD: the live tests **mutate the ledger they run against** (append-only,
+  by design) so they are not idempotent across runs in the "verify is ok:true" sense —
+  run them against a scratch DB, not a demo DB you care about. They need `site-07`
+  seeded; there is no endpoint to create a site, so seeding stays a Lane A step.
