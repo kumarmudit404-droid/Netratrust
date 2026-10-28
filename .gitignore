@@ -6,6 +6,9 @@ __pycache__/
 *.db
 .venv/
 
+# Build artifact of scripts/package_for_kaggle.py (Lane C)
+kaggle_payload.zip
+
 # --- front end (Lane B) ---
 netra/ui/node_modules/
 netra/ui/dist/
