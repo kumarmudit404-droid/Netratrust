@@ -338,3 +338,77 @@ def test_the_real_densenet_extractor_runs_on_cpu_untrained():
     assert vector.shape[0] == 2048
     assert np.isfinite(vector).all()
     assert "random-init" in features.version
+
+
+# ------------------------------- batched features and fitting from features
+
+
+def test_batched_features_equal_one_at_a_time_features():
+    """Batching is a speed change, not a numerical one. Proven, not assumed.
+
+    `netra/models/eyeq.py` pushes thousands of images through the backbone on
+    a T4, where one-at-a-time wastes most of the card. If batching moved the
+    numbers, a head fitted in a batched run would not match the gate that
+    serves single images at inference time.
+    """
+    from netra.models.quality import QuickQualFeatures
+
+    features = QuickQualFeatures(pretrained=False)
+    images = [preprocess(fundus(brightness=b))[0] for b in (1.0, 0.5, 0.2)]
+
+    one_at_a_time = features.batch(images, batch_size=1)
+    batched = features.batch(images, batch_size=3)
+
+    assert one_at_a_time.shape == batched.shape == (3, 2048)
+    assert np.allclose(one_at_a_time, batched, atol=1e-4)
+
+
+def test_batch_defaults_to_one_so_existing_callers_are_unchanged():
+    from netra.models.quality import QuickQualFeatures
+
+    features = QuickQualFeatures(pretrained=False)
+    images = [preprocess(fundus())[0]]
+    assert features.batch(images).shape == (1, 2048)
+    assert features.batch([]).shape == (0, 0)
+
+
+def test_fit_features_fits_the_same_head_as_fit():
+    """`fit()` now delegates, so the two paths must agree."""
+    from netra.models.quality import QualityGate, QuickQualFeatures
+
+    raw = [fundus(brightness=b) for b in (1.0, 0.95, 0.9, 0.1, 0.12, 0.15)]
+    labels = [1, 1, 1, 0, 0, 0]
+
+    # ONE extractor for both gates: two `pretrained=False` instances get
+    # different random weights, so sharing it is what makes this a comparison
+    # of the two fitting paths rather than of two different backbones.
+    extractor = QuickQualFeatures(pretrained=False)
+
+    via_images = QualityGate(features=extractor, head=None)
+    via_images.fit(raw, labels)
+
+    X = extractor.batch([preprocess(img)[0] for img in raw], batch_size=2)
+    via_features = QualityGate(features=extractor, head=None)
+    via_features.fit_features(X, labels)
+
+    probe = preprocess(fundus())[0]
+    assert via_images._p_usable(extractor(probe)) == pytest.approx(
+        via_features._p_usable(extractor(probe))
+    )
+
+
+def test_fit_features_refuses_a_single_class():
+    """A one-class head would answer every image the same way, confidently."""
+    from netra.models.quality import QualityGate, QuickQualFeatures
+
+    gate = QualityGate(features=QuickQualFeatures(pretrained=False), head=None)
+    with pytest.raises(ValueError, match="both usable and unusable"):
+        gate.fit_features(np.zeros((4, 8)), [1, 1, 1, 1])
+
+
+def test_fit_features_refuses_mismatched_lengths():
+    from netra.models.quality import QualityGate, QuickQualFeatures
+
+    gate = QualityGate(features=QuickQualFeatures(pretrained=False), head=None)
+    with pytest.raises(ValueError, match="differ in length"):
+        gate.fit_features(np.zeros((4, 8)), [1, 0, 1])

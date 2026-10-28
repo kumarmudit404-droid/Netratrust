@@ -126,14 +126,32 @@ class QuickQualFeatures:
     def __call__(self, image: np.ndarray) -> np.ndarray:
         """One preprocessed image -> a 1-D feature vector."""
         tensor = to_model_tensor(image).to(self.device)
+        return self._pool(tensor)[0]
+
+    def _pool(self, tensor) -> np.ndarray:
+        """An NCHW batch -> (N, 2C) mean-and-std features."""
         with self._torch.no_grad():
             maps = self.model.forward_features(tensor)
         mean = maps.mean(dim=(2, 3))
         std = maps.std(dim=(2, 3))
-        return self._torch.cat([mean, std], dim=1).cpu().numpy().ravel()
+        return self._torch.cat([mean, std], dim=1).cpu().numpy()
 
-    def batch(self, images: list[np.ndarray]) -> np.ndarray:
-        return np.stack([self(img) for img in images]) if images else np.empty((0, 0))
+    def batch(self, images: list[np.ndarray], batch_size: int = 1) -> np.ndarray:
+        """Features for several preprocessed images, `batch_size` at a time.
+
+        `batch_size=1` is the default so the behaviour is unchanged for every
+        existing caller. Fitting on EyeQ pushes thousands of images through a
+        T4, where one-at-a-time wastes most of the card, so
+        `netra/models/eyeq.py` raises it.
+        """
+        if not images:
+            return np.empty((0, 0))
+        out: list[np.ndarray] = []
+        for start in range(0, len(images), max(batch_size, 1)):
+            chunk = images[start : start + max(batch_size, 1)]
+            tensor = self._torch.cat([to_model_tensor(img) for img in chunk], dim=0)
+            out.append(self._pool(tensor.to(self.device)))
+        return np.concatenate(out, axis=0)
 
 
 # ---------------------------------------------------------------- the gate
@@ -201,18 +219,29 @@ class QualityGate:
         Features are frozen, so this fits only the head - which is the whole
         point of QuickQual and why it is viable on CPU.
         """
+        if len(images) != len(usable):
+            raise ValueError("images and labels differ in length")
+        processed = [preprocess(img)[0] for img in images]
+        return self.fit_features(self.features.batch(processed), usable)
+
+    def fit_features(self, X: np.ndarray, usable) -> QualityGate:
+        """Fit the head on features that are ALREADY extracted.
+
+        Separated from `fit()` so a caller with thousands of images - the EyeQ
+        run in `notebooks/train_kaggle.ipynb` - can extract once, keep the
+        matrix, and refit or inspect without paying for the backbone again.
+        """
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.svm import SVC
 
-        if len(images) != len(usable):
-            raise ValueError("images and labels differ in length")
-        if len(set(usable)) < 2:
+        X = np.asarray(X)
+        y = np.asarray(usable)
+        if len(X) != len(y):
+            raise ValueError("features and labels differ in length")
+        if len(set(y.tolist())) < 2:
             raise ValueError(
                 "need both usable and unusable examples to fit a quality head"
             )
-        processed = [preprocess(img)[0] for img in images]
-        X = self.features.batch(processed)
-        y = np.asarray(usable)
 
         # NOT `SVC(probability=True)`: deprecated in scikit-learn 1.9 and
         # removed in 1.11, which this build would hit as a hard failure on the
