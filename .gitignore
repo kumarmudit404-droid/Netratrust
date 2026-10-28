@@ -4,6 +4,7 @@ data/*
 !data/splits/
 __pycache__/
 *.db
+.venv/
 
 # --- front end (Lane B) ---
 netra/ui/node_modules/

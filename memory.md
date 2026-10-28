@@ -268,3 +268,24 @@
   `--borderline` change has not been re-measured for dark. Only one viewport (1431×840)
   was checked; no phone/tablet width was exercised, though the camp device is a tablet.
   `Referrals`, `Sites` and `Ledger` are still routed stubs and were not opened.
+
+### 2026-10-28 — Lane A — T-01 build environment
+- what changed: `py -3.12 -m venv .venv`; `pip install -r requirements.txt`; `.venv/`
+  added to `.gitignore` (it was not listed, so the venv showed as untracked). No pinned
+  version was changed.
+- verified: Python **3.12 was not installed on the build machine** — `py -0` listed only
+  3.13 — so 3.12.10 was installed side-by-side via winget (`Python.Python.3.12`) by
+  agreement, leaving 3.13 untouched. The first winget attempt failed with
+  `0x80072ee7 (ERROR_INTERNET_NAME_NOT_RESOLVED)`; a straight retry succeeded, so it was
+  transient DNS, not a bad package. `.venv` reports Python 3.12.10, pip 26.2.2.
+  Every pin in `requirements.txt` resolved to a **cp312 wheel** and installed clean
+  (exit 0): torch 2.14.1, torchvision 0.29.1, timm 1.0.30, numpy 2.5.4, scipy 1.18.1,
+  scikit-learn 1.9.1, mapie 1.6.0, fastapi 0.162.0, starlette 1.6.0, pydantic 2.14.1,
+  uvicorn 0.54.0, sqlmodel 0.0.48, sqlalchemy 2.1.6, cryptography 50.0.2, rfc8785 0.1.4,
+  httpx 0.28.1, grad-cam 1.5.7 (built from sdist), fhir.resources 8.3.0, pytest 8.4.2,
+  ruff 0.17.3. `pytest -q` on the pre-existing suite: **2 passed**.
+- unverified / TBD: `.python-version` still says 3.12 and now matches the interpreter,
+  but nothing pins the 3.12.x patch level. `pyyaml 6.0.3` arrived **transitively** (via
+  timm) and is NOT pinned in `requirements.txt`, so Lane A does not import it — see the
+  T-02 entry for the stdlib threshold reader written instead. No GPU was present; torch
+  was not exercised beyond import resolution, which is Lane C's concern.
