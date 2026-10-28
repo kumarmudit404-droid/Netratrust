@@ -88,7 +88,7 @@ def decide(
 ) -> AbstainDecision:
     """Turn a conformal prediction set into a clinical decision."""
     refer = refer_grades() if refer is None else refer
-    ordered = tuple(sorted(set(int(g) for g in prediction_set)))
+    ordered = tuple(sorted({int(g) for g in prediction_set}))
 
     if not ordered:
         # An empty set means the conformal threshold excluded every class. It

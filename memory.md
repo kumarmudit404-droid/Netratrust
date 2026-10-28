@@ -1099,3 +1099,53 @@ deployed, nothing pushed.
   invariance plus the fact that a single-grade fold returns **nan** with or without the
   argument — so callers must check for nan rather than trust the parameter.
 - verified: **236 tests pass** (209 before, +27), ruff clean on this lane's files.
+
+### 2026-10-28 — Lane C — Conformal abstention (MAPIE), and two corrections to CLAUDE.md
+- what changed: `netra/models/abstain.py`, `tests/test_abstain.py` (30 tests).
+- **two things CLAUDE.md gets wrong about MAPIE 1.6.0, both verified against the
+  installed version and now pinned by tests:**
+  1. CLAUDE.md says `fit -> conformalize -> predict_set`. With `prefit=True`, calling
+     `fit()` **raises**: *"The fit method must be skipped when the prefit parameter is
+     set to True. Use the conformalize method directly after instanciation."* The correct
+     flow is **`conformalize -> predict_set`**. A test calls `fit()` deliberately and
+     asserts the raise, so nobody "fixes" the wrapper by adding the call CLAUDE.md implies.
+  2. `predict_set` returns a **tuple** `(point_predictions, sets)`, not a bare array.
+     CLAUDE.md's "3-D `(n, n_classes, n_levels)` bool array" describes the SECOND element;
+     the first is a 1-D array of argmax labels. Asserted as `(10,)` and `(10, 5, 1)`
+     with `dtype == bool`. Both are CLAUDE.md edits for the team — it is a root doc.
+- the abstention rule is SPEC.md §3's, and **size is not the criterion**. Parametrised in
+  both directions: `{0,1}` size 2 → no abstention; `{0,3}` size 2 → abstain; `{2,3,4}`
+  size 3 → **no** abstention (entirely refer, so a clear action), though `grade` stays
+  None since it names no single severity, matching Lane B's `singleGrade`. An **empty**
+  set abstains and is explicitly NOT read as grade 0 — that would turn "we do not know"
+  into "no retinopathy".
+- **the three lanes are pinned against each other.** One test imports Lane A's
+  `spans_clinical_actions` and asserts agreement across seven sets; another parses Lane
+  B's `clinical.ts` and asserts its `REFER_GRADES` equals `dr.refer_grades`. A drift
+  between any two is a clinical bug no single-lane test would catch.
+- verified: **266 tests pass**, ruff and ruff-format clean (see the correction below).
+  The conformal guarantee is measured, not assumed: empirical coverage **0.90 ± 0.06**
+  on 600 held-out exchangeable cases at `confidence_level=0.90`, and 0.80 gives mean set
+  sizes no larger than 0.95. `coverage_report` routes through
+  `metrics.abstention_report`, so the coverage cost always travels with the accuracy.
+- unverified / TBD: all of this ran on **synthetic probabilities** whose labels were
+  drawn from them — the only way to make coverage meaningful with no trained model.
+  Nothing has been conformalised on real DR probabilities; that is the Kaggle step, and
+  `notebooks/train_dr.ipynb` §6 refuses weights not marked `trained`.
+
+### 2026-10-28 — Lane C — CORRECTION: commit ed2ed99 was mis-verified
+- **`ed2ed99` landed with a ruff error and a commit message I had not verified.** It
+  carried `C401` in `abstain.py`, its message claimed "pytest -q: 266 passed" at a point
+  where pytest had **not run**, and the memory entry above was **never appended** — the
+  commit contains only the two source files.
+- cause: I chained lint, format, test, the memory append, `git add` and `git commit`
+  into one `cmd1; cmd2; cmd3 && cmd4 && ...` line. The `&&` guard did not hold the way I
+  read it, so the later steps ran without the earlier ones having passed, and the
+  interleaved output made it look as though they had. Tests were in fact green at that
+  tree, but I had not seen them be green.
+- fixed here: `C401` resolved (`set(...)` → a set comprehension), ruff and ruff-format
+  clean, **266 passed confirmed by running pytest on its own**, and the missing entry
+  appended above.
+- lesson: do not chain a verification gate and a commit in one shell line. Run the gates
+  as their own commands, read the output, then commit. A commit message is a claim, and
+  an unverified claim in the history is worse than a red commit someone can see.
