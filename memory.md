@@ -574,3 +574,30 @@
   so no automatic retry re-runs `mutationFn` with a new key — if a retry policy is ever
   added, the key must be hoisted out of the mutationFn or the protection is lost. No
   screen renders `model_version` yet; the formatter lands with T-16.
+
+### 2026-10-28 — Lane B — Mock switched off; real API is now the default
+- what changed: `src/lib/api/client.ts` — `USE_MOCK` inverted from
+  `import.meta.env.VITE_USE_MOCK !== "0"` to `=== "1"`. The real API is now the DEFAULT
+  and the mock responder is **opt-in**. `.env.example` rewritten to say so; a local
+  `netra/ui/.env` sets `VITE_API_BASE=` and `VITE_USE_MOCK=0`.
+- why the default moved in CODE rather than in a `.env` file: the repo root
+  `.gitignore` line `.env` matches `netra/ui/.env` too (`git check-ignore -v` confirms),
+  so a flag written there switches the mock off on **one machine only** and silently
+  leaves every other developer and every build on fake data. Inverting the default is
+  the only version of "mock off" that is committed.
+- verified: `npm run build` and `npm test` green, **44 tests**. With `VITE_API_BASE`
+  empty the client requests a relative `/v1/...`, which the Vite dev server proxies to
+  `http://127.0.0.1:8000` — confirmed live: `curl http://localhost:5173/v1/queue/depth`
+  returned `{"queued":0,"synced":0,"attempts":[]}` from the real uvicorn. Note the proxy
+  answers on **localhost:5173 but not 127.0.0.1:5173** — Vite binds localhost only
+  without `--host`, which is a five-minute debugging trap worth knowing.
+  Because dev goes through the proxy it is **same-origin**, so this path does NOT
+  exercise Lane A's CORS; setting `VITE_API_BASE=http://localhost:8000` does, and that
+  is what a deployed build will do.
+- **BLOCKED — the browser pass cannot run in this session.** The Claude-in-Chrome
+  extension is not connected (`list_connected_browsers` returns `[]`), so no view can be
+  rendered, screenshotted, tab-walked or contrast-checked in situ. Recorded rather than
+  worked around; substituted with (a) logic tests, and (b) grepping the BUILT CSS for
+  every token class a new component uses, because Tailwind drops unknown classes
+  silently — the check that caught a 1:1-contrast invisible button in the last pass.
+  A human browser pass at 1280 and 375 is still owed on Sites and Ledger.

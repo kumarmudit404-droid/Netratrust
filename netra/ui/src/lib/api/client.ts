@@ -4,8 +4,20 @@
  * One function per endpoint, no more and no fewer. Adding an endpoint here
  * would break the frozen contract — raise it with Lane A instead.
  *
- * Set VITE_USE_MOCK=1 to serve every call from src/lib/api/mock.ts so screens
- * work before the backend is up.
+ * The real API is the DEFAULT. Set VITE_USE_MOCK=1 to serve every call from
+ * src/lib/api/mock.ts instead — a fallback for working on screens with no
+ * backend running, not the normal path.
+ *
+ * The default is inverted in code rather than set in a .env file because
+ * `.env` is gitignored at the repo root, so a flag written there would switch
+ * the mock off on one machine only and silently leave everyone else on fake
+ * data.
+ *
+ * With VITE_API_BASE empty, requests go to a relative /v1 path and the Vite
+ * dev server proxies them to http://127.0.0.1:8000 (see vite.config.ts). That
+ * makes dev same-origin; set VITE_API_BASE=http://localhost:8000 to bypass the
+ * proxy and exercise Lane A's CORS directly, which is what a deployed build
+ * will do.
  */
 
 import { ApiError } from "./errors"
@@ -26,7 +38,9 @@ import type {
 } from "./types"
 
 const BASE = import.meta.env.VITE_API_BASE ?? ""
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "0"
+// Opt IN to the mock. Previously this read `!== "0"`, which defaulted every
+// developer and every build to fake data unless they knew to turn it off.
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "1"
 
 /** Per-ACTION idempotency key. SPEC.md: at-least-once delivery with server-side
  *  dedup — 409 if the key is still in flight, 422 if reused with a different
