@@ -1149,3 +1149,54 @@ deployed, nothing pushed.
 - lesson: do not chain a verification gate and a commit in one shell line. Run the gates
   as their own commands, read the output, then commit. A commit message is a claim, and
   an unverified claim in the history is worse than a red commit someone can see.
+
+### 2026-10-28 — Lane C — Threshold fitting on the calibration split, and why it refused to write
+- what changed: `netra/models/fit_thresholds.py`, `scripts/fit_quality_head.py`,
+  `tests/test_thresholds.py` (22 tests). **`config/thresholds.yaml` is UNCHANGED** —
+  see below; that is the result, not an omission.
+- what it fits and what it refuses to touch: only `quality_gate.usable_min_p` and
+  `reject_max_p`. `dr.conformal_confidence` is the coverage the programme ASKS for
+  (SPEC.md fixes 0.90) and re-fitting it on calibration data would be choosing the
+  guarantee to flatter the model; `dr.refer_grades`,
+  `dr.abstain_if_set_spans_actions` and `sites.min_n_for_rate` are clinical or
+  reporting policy, and `refer_grades` is mirrored in Lane A and Lane B so moving it
+  silently would be a cross-lane clinical change. Two fitted, four carried over, tested.
+- **it ran, and then refused to write — twice, for two different real reasons.**
+  1. With a **random-init** backbone on 20 calib images the quantiles gave
+     `usable_min_p 0.42 / reject_max_p 0.40` — a borderline band **0.02 wide**. Added
+     `MIN_BORDERLINE_BAND = 0.10`: a band that thin is measuring noise, not quality.
+  2. With the **real pretrained densenet121** (weights downloaded, ~32 MB) and a head
+     fitted on synthetic degradations, it gave `0.95 / 0.85` — which PASSES the band
+     guard and is still useless: a gate that rejects nothing. The cause is structural,
+     not numerical. The calibration split holds **only real images**, and a head trained
+     to tell blur from no-blur scores them all ≈1.0 (10th percentile **0.852**). So the
+     score distribution is **one-sided by construction** and quantiles would carve a
+     "reject" band out of the usable population — inventing a boundary the data does not
+     contain. Added `ONE_SIDED_SCORE_FLOOR = 0.50`.
+  Both constants carry the observed numbers in their comments, and the run now exits 3
+  with an explanation and leaves the file alone — verified by `diff` against a
+  pre-run copy: **identical**.
+- the honest conclusion: **these two cut-points cannot be fitted in this build.** Doing
+  it needs a calibration set containing both usable and unusable images judged by a
+  human, i.e. a quality-labelled corpus. EyeQ is that corpus and its labels reference
+  EyePACS (~89 GiB), which is out of scope. The shipped 0.70/0.30 placeholders stay,
+  and `TODO(review)` is in the header the fitter WOULD have written plus in
+  `quality.py`. Writing 0.95/0.85 would have looked like progress and been a regression.
+- `scripts/fit_quality_head.py` fits a stand-in head from **synthetic** degradations
+  (blur, under-exposure, clipped FOV — the three faults the reason-code channel names)
+  of real calibration images, 24 positive + 24 negative. It prints, and its docstring
+  states, that a human never judged these images and that any gate number measured with
+  it belongs in the **synthetic table**, never pooled with real poor-quality images
+  (`.claude/rules/ml.md`). Without any head the gate refuses to produce a verdict, so
+  this is what makes the end-to-end path exercisable at all.
+- **the cross-lane contract is now tested.** `thresholds.py` writes only the two-level
+  subset Lane A's parser accepts, `write()` re-reads and fails rather than leaving an
+  unparseable file, and three tests import **Lane A's own parser** to assert it can read
+  what Lane C writes, that both parse the shipped file identically, and that both read
+  the same `refer_grades`. A format drift would otherwise 500 a route handler and break
+  nothing in Lane C.
+- a floating-point trap my own test caught: `0.95 - 0.85` is `0.09999999999999998`, so
+  the band guard rounds to 4dp **before** comparing — without that round, that pair
+  would be rejected for a reason that has nothing to do with quality.
+- verified: **288 tests pass** (266 before, +22). ruff and ruff-format clean on this
+  lane's files, checked as their own commands this time.
