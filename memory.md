@@ -949,3 +949,12 @@ deployed, nothing pushed.
   by running it: the CLI mirrors the remote directory under `-p` (payload lands at
   `<out>/test_images/test_images/<id>.png.zip`, not `<out>/<id>.png`) and it zips
   single-file downloads. The first version silently retained 0/4 because of it.
+
+### 2026-10-28 — Lane C — CORRECTION: reverted a cross-lane formatting change
+- `ruff format scripts` in the previous commit also reformatted
+  **`scripts/gen_device_key.py`**, which is Lane A tooling. The change was pure import
+  sorting with no behaviour change, but Lane A's own T-02 entry explicitly recorded
+  leaving those three pre-existing ruff findings alone as "not this lane's call to fix".
+  Silently overriding that crosses a lane boundary and contradicts a recorded decision,
+  so it is reverted to its committed state. Lane C's ruff invocations are now scoped to
+  the files this lane owns, not to `scripts/` wholesale.
