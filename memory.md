@@ -653,3 +653,41 @@
   interval is the honest alternative that rule prefers, so small-n sites are plotted,
   flagged and labelled "k of n" — but if the team wants them suppressed entirely from
   the plot, that is a one-line change in `toForestPoints`.
+
+### 2026-10-28 — Lane B — T-17 Ledger view: verify, checkpoint, and the tamper demo
+- what changed: `src/lib/ledgerState.ts` (verify result → display state, as a pure
+  function) + `ledgerState.test.ts` (16 tests), `src/routes/Ledger.tsx` (was a stub).
+  `queries.ts`: `useLedgerVerify({enabled, pollMs})` with `staleTime: 0, gcTime: 0`, and
+  `useCheckpoint` now polls.
+- how the demo is carried, given there is **no corrupt endpoint**: a prominent "Verify
+  the chain" button, a **"Re-check every 3s" toggle** so the flip happens on screen
+  while the presenter runs `python -m netra.ledger.tamper --seq 2`, and a **session
+  history list** so `ok:true → ok:false` is visible as a TRANSITION rather than as a
+  value that might always have been false. The screen also prints the raw
+  `first_bad_index = N` and the literal `ok: false · first_bad_index: N` on a badge, so
+  what is on stage matches what the endpoint returned. A card states plainly that no
+  endpoint corrupts the ledger and why, and gives the exact CLI.
+- verified: `npm run build` and `npm test` green — **80 tests, 9 files** (64 before).
+  The ok:false path is tested at least as hard as ok:true: `first_bad_index` reaches the
+  headline (asserted for 2 and for 7), **index 0 is treated as a real index** (a falsy
+  check there would silently downgrade a real detection), and `ok:false` with a null
+  index is its own `failed-without-index` state rather than being read as fine. A
+  **failed request is NOT dressed as tampering** — different state, different status,
+  `isAlarming` false — and its explainer is asserted to contain "not the same as a clean
+  result". A refetch over a stale `ok:true` renders as "checking", so during the demo a
+  stale pass cannot linger looking current. The ok explainer is asserted NOT to contain
+  "secure" or "guarantee": it says what was recomputed, and claims nothing more.
+  Built-CSS check: `border-l-usable`, `border-l-reject`, `border-l-border-subtle`,
+  `text-usable`, `accent-text`, `break-all`, `sm:col-span-2`, `lg:grid-cols-2` and
+  Capture's arbitrary `lg:grid-cols-[minmax(...)]` all emit real rules.
+- note on an earlier greps-lie moment: `grep` for escaped-colon Tailwind selectors from
+  bash reported `lg:grid-cols-2` MISSING twice because of backslash handling in the
+  shell, not because the class was absent. Verified with a Python `str.find` instead —
+  all present. Worth knowing before someone "fixes" a class that was never broken.
+- unverified / TBD: **not rendered in a browser** (extension not connected this
+  session), so the alarm state's visual weight, the checkbox's focus ring and layout at
+  phone width are unconfirmed. The checkpoint's signature is **displayed, not verified**
+  client-side — the UI shows what the server signed and does not re-check it, so the
+  "an outside party can prove a rewrite" claim is made in prose on the card and is not
+  something this screen demonstrates. Verifying it in the browser would need the Ed25519
+  public key and WebCrypto, and is not in the frozen contract.

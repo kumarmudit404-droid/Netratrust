@@ -24,16 +24,31 @@ export function useQueueDepth() {
   })
 }
 
-export function useLedgerVerify(enabled = false) {
+/** Verification is OPERATOR-TRIGGERED: it stays disabled until the Ledger view
+ *  says it has run, so the screen cannot show a stale `ok:true` that nobody
+ *  asked for. `pollMs` drives the optional re-check loop that makes the tamper
+ *  demo's ok:true -> ok:false flip happen on screen. */
+export function useLedgerVerify(
+  opts: { enabled?: boolean; pollMs?: number | false } = {},
+) {
   return useQuery({
     queryKey: keys.ledgerVerify,
     queryFn: () => api.verifyLedger(),
-    enabled,
+    enabled: opts.enabled ?? false,
+    refetchInterval: opts.pollMs ?? false,
+    // The point of this screen is the CURRENT state of the chain, so a cached
+    // answer is never good enough.
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 
 export function useCheckpoint() {
-  return useQuery({ queryKey: keys.checkpoint, queryFn: () => api.ledgerCheckpoint() })
+  return useQuery({
+    queryKey: keys.checkpoint,
+    queryFn: () => api.ledgerCheckpoint(),
+    refetchInterval: LIVE_MS,
+  })
 }
 
 export function useSiteStatus(siteId: string) {

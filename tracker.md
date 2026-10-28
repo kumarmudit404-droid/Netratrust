@@ -35,7 +35,7 @@ B (Frontend), C (ML & Evaluation).
 | T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | done | T-13 |
 | T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | done | — |
-| T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | todo | — (T-06 done) |
+| T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | done | — |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
 | T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); typed client now sends a key on all four mutations (Lane B); device-side queue outstanding | A | doing | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
