@@ -723,3 +723,22 @@
   by design) so they are not idempotent across runs in the "verify is ok:true" sense —
   run them against a scratch DB, not a demo DB you care about. They need `site-07`
   seeded; there is no endpoint to create a site, so seeding stays a Lane A step.
+
+### 2026-10-28 — Lane B — CORRECTION: commit 4594b34 was committed RED
+- what happened: `src/lib/api/live.test.ts` read its flag from `process.env`, but
+  `tsconfig.app.json` sets `types: ["vite/client"]`, so `process` is not declared and
+  **`npm run build` failed with two TS2591 errors**. I ran `npm test` (green) before
+  committing and did NOT run `npm run build`, so 4594b34 broke the "both gates green"
+  rule. Caught on the next build, one commit later.
+- the fix: read `import.meta.env.VITE_NETRA_LIVE` instead, so the flag goes through the
+  same mechanism as every other env var the client reads and needs no tsconfig change
+  or new dependency. The flag is therefore **`VITE_NETRA_LIVE=1`**, not `NETRA_LIVE=1`.
+- re-verified after the rename: `npm run build` clean, `npm test` 92 passed / 10 skipped,
+  and the live suite **10/10 against a freshly seeded database**. It is not vacuous:
+  pointed at the database still tampered from the T-17 demo it correctly reported
+  1 failure — "GET /v1/ledger/verify reports an intact chain" — which is the assertion
+  doing its job. The test file now says to run it against a scratch DB and explains that
+  failure mode, so nobody files it as flaky.
+- lesson recorded rather than quietly fixed: a test-only file can break the BUILD,
+  because `tsc -b` type-checks `src/**` including tests. `npm test` passing says nothing
+  about `npm run build`. Both gates, every commit.

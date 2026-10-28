@@ -1,25 +1,34 @@
 /**
  * Live integration: the real typed client against the real Lane A API.
  *
- * SKIPPED unless NETRA_LIVE=1, so the normal `npm test` never depends on a
+ * SKIPPED unless VITE_NETRA_LIVE=1, so the normal `npm test` never depends on a
  * running server. To run it:
  *
  *   # terminal 1, from the repo root
  *   NETRA_DB=... NETRA_KEYS_DIR=... .venv/Scripts/python -m uvicorn netra.api.main:app --port 8000
  *   # terminal 2, from netra/ui  (site-07 must be seeded)
- *   NETRA_LIVE=1 VITE_API_BASE=http://127.0.0.1:8000 npx vitest run src/lib/api/live.test.ts
+ *   VITE_NETRA_LIVE=1 VITE_API_BASE=http://127.0.0.1:8000 npx vitest run src/lib/api/live.test.ts
  *
  * What this buys that the mock cannot: it proves the SHAPES Lane B compiled
  * against are the shapes Lane A actually sends, that CORS permits the
  * Idempotency-Key header cross-origin, and that a retry really is deduped. A
  * green mock suite proves only that the mock agrees with itself.
+ *
+ * Run against a SCRATCH database. These tests append to the ledger (which is
+ * append-only by design), and the "intact chain" case needs a chain nobody has
+ * run `netra.ledger.tamper` against — pointed at a tampered DB it fails, which
+ * is the test working, not the test being flaky.
  */
 
 import { describe, expect, it } from "vitest"
 import { api } from "./client"
 
-const LIVE = process.env.NETRA_LIVE === "1"
-const SITE = process.env.NETRA_LIVE_SITE ?? "site-07"
+// Read through `import.meta.env`, not `process.env`: tsconfig.app.json sets
+// `types: ["vite/client"]`, so `process` is not declared and `npm run build`
+// fails on it. Vite exposes any VITE_-prefixed variable, so the flag is
+// VITE_NETRA_LIVE.
+const LIVE = import.meta.env.VITE_NETRA_LIVE === "1"
+const SITE = import.meta.env.VITE_NETRA_LIVE_SITE ?? "site-07"
 
 /** A distinct hash per run, so re-running does not collide on dedup. */
 function hash(seed: string): string {
