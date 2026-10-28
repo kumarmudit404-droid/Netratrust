@@ -140,17 +140,17 @@ export default function Sites() {
             <ForestPlot
               points={gradability}
               pooled={pooled}
-              pooledLabel={
-                data.pooled?.gradability
-                  ? `pooled ${formatCounts(data.pooled.gradability)}`
-                  : "pooled"
-              }
-              xLabel="proportion admitted (0–1), with 95% Wilson interval"
+              pooledLabel="pooled"
+              xLabel="proportion (0–1)"
             />
             <p className="mt-1 text-caption text-text-muted">
-              The dashed line is the pooled count across all sites, drawn as a
-              reference. It is not the programme's headline score, and it is not
-              a mean of the per-site rates.
+              Bars are 95% Wilson intervals. The dashed line is the pooled count
+              across all sites
+              {data.pooled?.gradability
+                ? ` (${formatCounts(data.pooled.gradability)})`
+                : ""}
+              , drawn as a reference. It is not the programme's headline score,
+              and it is not a mean of the per-site rates.
             </p>
           </CardContent>
         </Card>
@@ -168,12 +168,12 @@ export default function Sites() {
             <ForestPlot
               points={abstention}
               pooled={null}
-              xLabel="proportion abstained (0–1), with 95% Wilson interval"
+              xLabel="proportion (0–1)"
             />
             <p className="mt-1 text-caption text-text-muted">
-              No pooled line: the API sends pooled counts for gradability only,
-              and averaging the per-site rates would be the mean this project
-              does not report.
+              Bars are 95% Wilson intervals. No pooled line: the API sends
+              pooled counts for gradability only, and averaging the per-site
+              rates would be the mean this project does not report.
             </p>
           </CardContent>
         </Card>

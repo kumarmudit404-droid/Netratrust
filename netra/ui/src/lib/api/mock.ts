@@ -36,6 +36,18 @@ function fakeHex(len: number): string {
 
 const delay = (ms = 180) => new Promise((r) => setTimeout(r, ms))
 
+/** `?tamper=2` -> 2. Anything else (or no DOM) -> null. See verifyLedger. */
+export function tamperedSeq(search?: string): number | null {
+  const raw =
+    search ??
+    (typeof window === "undefined" ? "" : window.location.search)
+  const value = new URLSearchParams(raw).get("tamper")
+  // Digits only. `Number("")` is 0, so a bare `?tamper=` would otherwise
+  // render as "Tampering detected at entry 0" - a fabricated finding.
+  if (value === null || !/^\d+$/.test(value)) return null
+  return Number(value)
+}
+
 export const mock = {
   async createEncounter(body: EncounterRequest): Promise<EncounterResponse> {
     await delay()
@@ -62,6 +74,14 @@ export const mock = {
 
   async verifyLedger(): Promise<LedgerVerifyResponse> {
     await delay()
+    // Against the real API the ok:false state comes from running
+    // `python -m netra.ledger.tamper --seq N`. The mock has no ledger to
+    // corrupt, so `?tamper=2` simulates the result for designing and
+    // reviewing that screen. It exists ONLY inside the mock responder, which
+    // is itself opt-in via VITE_USE_MOCK=1, so it can never affect a build
+    // talking to the real API - and it is not an endpoint.
+    const seq = tamperedSeq()
+    if (seq !== null) return { ok: false, first_bad_index: seq }
     return { ok: true, first_bad_index: null }
   },
 

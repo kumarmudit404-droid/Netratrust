@@ -850,3 +850,59 @@ real API through the Vite dev proxy, matching the committed default. Anyone runn
 
 **Servers:** both stopped (uvicorn :8000 and Vite :5173; no listeners remain). Nothing
 deployed, nothing pushed.
+
+### 2026-10-28 — Lane B — Browser pass attempted and BLOCKED; static checks instead
+- **The browser pass did NOT happen. There are no screenshots.** Sites, Ledger and
+  Referrals have still never been rendered. The Chrome extension reported "not
+  connected" and `list_connected_browsers` returned `[]`; the cause was concrete —
+  `Get-Process chrome` returned **0 processes**, so Chrome was not running for the
+  extension to attach to. Raised with the team, who chose static checks only for this
+  session. Everything in the brief that needs a viewport is therefore still owed:
+  horizontal scroll at 1280/375, focus rings in situ, the forest plot actually
+  rendering, intervals bracketing their markers visually, the counts table scrolling,
+  the progress `<ol>` wrapping at 375px, and the Ledger alarm state's visual weight.
+- what changed instead:
+  1. `src/lib/api/mock.ts` — `verifyLedger` now honours **`?tamper=2`** and returns
+     `{ok:false, first_bad_index:2}`. The mock has no ledger to corrupt, and against the
+     real API that state comes from the tamper CLI, so this exists purely to make the
+     Ledger view's ok:false state reviewable with no backend. It lives ONLY inside the
+     mock responder, which is itself opt-in via `VITE_USE_MOCK=1`, so it cannot affect a
+     build talking to the real API — and it is **not an endpoint**.
+     `src/lib/api/mockTamper.test.ts` (4 tests) pins the parse: `?tamper=0` is a REAL
+     index, and `?tamper=` / `abc` / `-1` / `1.5` are rubbish → null. The first draft
+     returned **0 for a bare `?tamper=`** because `Number("")` is 0, which would have
+     rendered "Tampering detected at entry 0" — a fabricated finding. Caught by the test.
+  2. `src/contrast.test.ts` (16 tests) — the WCAG arithmetic the last browser pass did
+     BY HAND is now a regression guard, parsed from `index.css` itself. Measured, all
+     clearing AA 4.5:1 on both surfaces: `--text` 17.74/16.37, `--text-muted` 7.56/6.98,
+     `--usable` 5.02/4.63, `--borderline` 5.24/4.84, `--reject` 6.57/6.07, `--abstain`
+     6.46/5.97 (--bg / --surface). It also pins the specific regression — the old
+     `#9A6700` is asserted to FAIL on `--surface` (4.49) while the current `#926300`
+     passes — asserts `text-border-subtle` appears nowhere in non-test source (it
+     measures 1.47:1 and index.css calls it decorative), and asserts the dark block does
+     **not** redefine the status hues, so dark mode's known sub-AA gap cannot be shipped
+     by accident.
+  3. `src/routes/Sites.tsx` — the forest plot's x-axis label was
+     `"proportion admitted (0–1), with 95% Wilson interval"`, roughly 290px of 13px text
+     inside a plot area that is only about 233px wide at 375px once the 78px y-axis and
+     gutters are taken off. Shortened to `"proportion (0–1)"`, and the pooled
+     `ReferenceLine` label from `"pooled 305/412 (0.70-0.78)"` to just `"pooled"`; the
+     counts moved into the card's footer prose, which wraps, and the exact figures were
+     already in the counts table. **This fix is INFERRED from arithmetic, not observed** —
+     it removes a likely clip but has not been seen to.
+- **two things that would have been caught only in a browser, and still would be:**
+  the contrast test proves a colour PAIR is legible, not that the right colour reached
+  the right element — the invisible-button bug in the last pass was `cn()` merging
+  `--text` onto `--text`, which this cannot see; and nothing here renders a chart, so
+  Recharts could still draw nothing and every gate would stay green.
+- verified: `npm run build` clean, `npm test` **112 passed / 10 skipped, 13 files**
+  (96 before). `VITE_USE_MOCK` restored to **0** in the gitignored `netra/ui/.env`,
+  matching the committed default; the dev server and the API are both stopped (no
+  listeners on 5173 or 8000).
+- a repeat of the lesson from 8443b4f, caught pre-commit this time: `contrast.test.ts`
+  first used `node:fs` + `__dirname` and broke `npm run build` with TS2307/TS2304,
+  because `tsconfig.app.json` sets `types: ["vite/client"]` and `tsc -b` checks tests.
+  `import "./index.css?raw"` was tried as the Vite-native fix and returns an **empty
+  string** under vitest (the CSS pipeline intercepts it). Resolved with a
+  `/// <reference types="node" />` scoped to that one file, rather than adding `"node"`
+  to tsconfig — which would let browser code import `node:fs` and still type-check.
