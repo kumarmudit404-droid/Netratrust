@@ -3,7 +3,7 @@
     # smoke, on CPU, a couple of steps on a handful of images
     python -m netra.models.train --smoke --images data/aptos/images/calib
 
-    # the real run, on Kaggle (see notebooks/train_dr.ipynb)
+    # the real run, on Kaggle (see notebooks/train_kaggle.ipynb)
     python -m netra.models.train --epochs 12 --batch-size 16
 
 There is no GPU on the build box, so a full run never happens here. `--smoke`
@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({k: v for k, v in result.items() if k != "history"}, indent=2))
     if args.smoke:
         print("\nSMOKE ONLY - this is not a trained model. Train on Kaggle:")
-        print("  notebooks/train_dr.ipynb")
+        print("  notebooks/train_kaggle.ipynb")
     return 0
 
 
