@@ -371,3 +371,51 @@
   every existing entry unverifiable. The tamper demo is **not reachable from the API**
   and never will be — the nine endpoints are frozen and a "corrupt the ledger" route in a
   deployed build is a liability; T-17 drives it as a CLI beside the Ledger view.
+
+### 2026-10-28 — Lane A — T-04 POST /v1/encounters, idempotency, and CORS
+- what changed: `netra/api/main.py` (app factory, `lifespan=`, CORS),
+  `netra/api/deps.py`, `netra/api/schemas.py`, `netra/api/clinical.py`,
+  `netra/api/config.py`, `netra/api/idempotency.py`,
+  `netra/api/routes/encounters.py`, `tests/test_encounters.py` (24 tests).
+- verified: **60 tests pass.** The encounter row and its ledger entry are written in ONE
+  transaction and committed together, so a response can never name a ledger entry that
+  does not exist — asserted by fetching the returned `ledger_idx` and by asserting that
+  a 422 leaves **zero** encounters AND zero ledger entries. A rejected image records
+  with `dr_grade=None`, `prediction_set=None` and `abstained=False` (not an abstention —
+  nothing was graded); a reject carrying a prediction set is a 422. Abstention matches
+  Lane B's `clinical.ts` in both directions: `{0,3}` abstains, `{0,1}` does not, `{3}`
+  records grade 3. A test walks the stored payload and asserts **no float anywhere**.
+  Idempotency: a retry replays the stored response and creates nothing new (1 encounter,
+  1 ledger entry after two POSTs); an in-flight key is **409**; a key reused with a
+  different body is **422**, and 422 wins over 409 when both apply; a failed request
+  releases its claim so a retry can proceed. Handlers are sync `def` — enforced at app
+  construction, not just asserted in a test.
+  **Driven against a real uvicorn on :8077, not only TestClient:** the cross-origin
+  preflight from `http://localhost:5173` returns `access-control-allow-origin`,
+  `allow-methods: GET, POST, PATCH, OPTIONS` and `allow-headers: … Idempotency-Key,
+  X-Device-Kid`; a disallowed origin gets no allow-origin header; two POSTs with one key
+  produced one encounter with `idempotency-replayed: true` on the second; the stored
+  payload came back key-sorted with `"prediction_set":[0,3]` and `"abstained":true`; and
+  `python -m netra.ledger.verify` reported `ok: 1 entries verified`.
+- what changed (decisions worth knowing):
+  1. **`FastAPI 0.162.0` does not flatten `include_router` into `app.routes`** — it
+     appends one `fastapi.routing._IncludedRouter` whose real routes hang off
+     `.original_router`. A naive `app.routes` scan finds only `/docs` and `/openapi.json`
+     and silently checks nothing; `contract_routes()` walks the nesting. This was caught
+     because the sync-handler test asserted it had found at least one route.
+  2. **`device_kid` travels as an optional `X-Device-Kid` header**, never in the body:
+     SPEC.md's frozen body names no device field. It defaults to the site's registered
+     device, and registers `device-1` on first sight.
+  3. **Thresholds are read from `config/thresholds.yaml` by a ~40-line stdlib parser**
+     (`netra/api/config.py`), NOT PyYAML: pyyaml is unpinned (transitive via timm) and
+     rules.md §1 allows only what is pinned. The parser raises on any syntax it does not
+     recognise rather than guessing, and the file resolves from the repo root so the
+     answer does not depend on uvicorn's CWD. If `thresholds.yaml` ever grows block
+     lists or anchors, pin PyYAML by agreement and delete the module.
+- unverified / TBD: **no authentication anywhere.** Any caller can name an
+  `X-Device-Kid` and the server will register it; there is no enrolment authority. The
+  stale-claim reclaim (`IN_FLIGHT_TTL_SECONDS = 60`) is **untested against a real
+  crash** — only the fresh-claim 409 path is covered. Concurrency is untested: SQLite
+  has one writer, and the 409 path is exercised by inserting the in-flight row directly
+  rather than by two simultaneous requests. `GET /v1/queue/depth` is not built yet, so
+  `idempotency.depth()` is written but unexercised.

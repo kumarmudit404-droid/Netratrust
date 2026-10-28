@@ -22,7 +22,7 @@ B (Frontend), C (ML & Evaluation).
 | T-01 | Build env: Python 3.12 venv, `pip install -r requirements.txt`, green `pytest` | A | done | — |
 | T-02 | DB tables + append-only triggers (SQLModel) | A | done | T-01 |
 | T-03 | Ledger: hash chain + Ed25519 + rfc8785 write/verify | A | done | T-02 |
-| T-04 | `POST /v1/encounters` (append-before-return) | A | todo | T-03 |
+| T-04 | `POST /v1/encounters` (append-before-return) + CORS + idempotency | A | done | T-03 |
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | todo | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | todo | T-03 |
 | T-07 | Site status, metrics, queue-depth endpoints | A | todo | T-02 |
@@ -37,7 +37,7 @@ B (Frontend), C (ML & Evaluation).
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | T-07 |
 | T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7 | B | todo | T-06 |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
-| T-19 | Offline capture queue + sync (idempotency key) | A | todo | T-04 |
+| T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); device-side queue outstanding | A | doing | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
 | T-21 | Deploy to Fly.io (volume for SQLite) | A | todo | T-18 |
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |

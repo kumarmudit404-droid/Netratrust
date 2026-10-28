@@ -60,3 +60,24 @@ def registered(session, keystore):
     )
     session.commit()
     return {"site_id": TEST_SITE, "device_kid": TEST_KID}
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch, registered):
+    """A TestClient over the real app, with the real lifespan.
+
+    `NETRA_DB` and `NETRA_KEYS_DIR` point at the same tmp_path the `engine` and
+    `keystore` fixtures use, so a test can inspect the database the app just
+    wrote and verify signatures against the key it just signed with. The
+    lifespan is exercised rather than bypassed: `TestClient` as a context
+    manager is what triggers it.
+    """
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("NETRA_DB", str(tmp_path / "netra.db"))
+    monkeypatch.setenv("NETRA_KEYS_DIR", str(tmp_path / "keys"))
+
+    from netra.api.main import create_app
+
+    with TestClient(create_app()) as c:
+        yield c
