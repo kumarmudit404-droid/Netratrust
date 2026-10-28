@@ -995,3 +995,59 @@ deployed, nothing pushed.
   survives p exactly 0 and 1 (logit(0) is -inf and the eps clip is what saves it);
   coverage + abstention_rate is asserted to sum to 1 across every admit count.
 - verified: **178 tests pass** (142 before, +36), ruff clean on this lane's files.
+
+### 2026-10-28 — Lane C — Quality gate (QuickQual), preprocessing, reason codes
+- what changed: `netra/models/preprocess.py`, `netra/models/reason_codes.py`,
+  `netra/models/thresholds.py`, `netra/models/quality.py`, `tests/test_quality.py`
+  (31 tests).
+- **the gate refuses rather than guesses.** With no head loaded it returns
+  `state="unavailable"`, `verdict=None`, `score_milli=None`,
+  `model_version="unloaded"` — and the test asserts explicitly that it does not
+  default to `usable`, because "usable" is the one answer that lets an ungradable
+  image through into a grade and then a referral. Three ways to end up headless are
+  each covered: no pickle at all; an **unloadable** pickle (SPEC.md expects the
+  released one may not load under scikit-learn 1.9.1, so the failure is caught and
+  reported, not raised); and `NETRA_QUICKQUAL_MEME` set.
+- **QuickQual-MEME is NOT implemented.** SPEC.md's Fallback A is 10 parameters printed
+  in the paper, and this build does not have that table. Ten invented numbers would be
+  a fabricated decision rule that *looks* published, so the code refuses with a message
+  naming what is missing. `TODO(review)` in `quality.py`: transcribe and pin them.
+- preprocessing is **background removal + resize ONLY**, with the ablation in the
+  docstring so nobody re-adds CLAHE: Ben Graham 0.8260 and CLAHE 0.8238 both measured
+  BELOW plain crop+resize 0.8310. `CropReport` carries the retained fraction at every
+  call, per ml.md. An all-black frame (a lens cap) returns the ORIGINAL with
+  `crop_failed=True` rather than a zero-size array that explodes three functions later.
+- reason codes are explicitly **not the gate** (SPEC.md §1: no published absolute
+  Laplacian threshold for fundus images exists). They pick a retake sentence only. Focus
+  and exposure are measured **inside the retina mask**, because the black surround is
+  perfectly smooth and perfectly dark — including it makes the measurement a function of
+  the camera's aperture rather than of the image, which a test pins. An all-black frame
+  reports `fov_mask`, not `focus`: zero variance is true but the actual fault is that
+  there is no retina. `TODO(review)`: the four cut-points are uncalibrated and marked as
+  such in the module.
+- **a new library gotcha, not in CLAUDE.md:** `SVC(probability=True)` is **deprecated in
+  scikit-learn 1.9 and removed in 1.11** — it emits a FutureWarning now and would be a
+  hard failure on the next bump. Replaced with
+  `CalibratedClassifierCV(SVC(), ensemble=False, method="sigmoid")`, which is the same
+  Platt scaling SVC ran internally, so the head stays calibrated — which matters because
+  the gate thresholds are probability cut-points. Below 4 examples in the smallest class
+  there is nothing to cross-validate, so it fits a bare SVC and `_p_usable` squashes
+  `decision_function` instead; that path is explicitly NOT calibrated and says so.
+- `thresholds.py` reads AND writes `config/thresholds.yaml` inside the same two-level
+  subset Lane A's parser accepts, and `write()` re-reads what it wrote and fails rather
+  than leaving an unparseable file on disk. `quality_cutoffs()` refuses an unordered
+  pair, which would silently collapse the three-way gate into a two-way one.
+- verified: **209 tests pass** (178 before, +31), ruff clean. The real densenet121 at
+  512px is CPU-smoked with `pretrained=False` (so it never touches the network) and the
+  pooled feature vector is asserted to be **2048-d** — 1024 channels of mean
+  concatenated with 1024 of std, since QuickQual pools both and std is what carries blur.
+  `to_model_tensor` is asserted to produce exactly ±1.0 for white/black at mean/std 0.5.
+  The three-way band is parametrised across both inclusive boundaries (0.70 → usable,
+  0.69 → borderline, 0.30 → reject). A usable verdict is asserted to carry **no** cause.
+- unverified / TBD: features from a random-init backbone are **meaningless**, so no
+  number from these smoke tests is a measurement; `model_version` records `random-init`
+  so such a run cannot be mistaken for a real one. The gate has **never been fitted on
+  real quality labels** — EyeQ was unobtainable (its labels reference EyePACS, which the
+  brief forbids downloading), so there is no local quality-labelled corpus at all. The
+  published EyeQ figures (0.886 / 0.9687 / 0.811) are the paper's, on EyeQ, and are
+  flagged in the module as not ours.
