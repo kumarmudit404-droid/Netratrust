@@ -1051,3 +1051,51 @@ deployed, nothing pushed.
   brief forbids downloading), so there is no local quality-labelled corpus at all. The
   published EyeQ figures (0.886 / 0.9687 / 0.811) are the paper's, on EyeQ, and are
   flagged in the module as not ours.
+
+### 2026-10-28 — Lane C — DR classifier, dataset over frozen splits, training loop, Kaggle notebook
+- what changed: `netra/eval/metrics.py` gained `quadratic_weighted_kappa`;
+  `netra/models/dr.py`, `netra/models/dataset.py`, `netra/models/train.py`,
+  `notebooks/train_dr.ipynb` (15 cells), `tests/test_dr.py` (22 tests) and 4 more
+  metrics tests.
+- **a real defect, found by running the smoke rather than by reasoning.**
+  `train.py --smoke` correctly wrote `trained: false` into the checkpoint, but
+  `DRClassifier._load` set `self.trained = True` unconditionally — so a **two-step
+  artifact loaded and reported `model_version` as a real checkpoint name**. That is
+  precisely the fabricated clinical output this lane must not ship. `_load` now honours
+  the flag, a bare `state_dict` with no provenance is assumed **untrained** rather than
+  assumed good, and three tests pin it. Caught by printing the version string after the
+  smoke, which is why the smoke was worth running end to end.
+- the classifier refuses rather than guesses: unloaded → `available=False`,
+  `model_version="unloaded"`, and `predict`/`predict_proba` **raise `ModelNotLoaded`**.
+  There is no code path returning a grade from absent weights. A corrupt or missing
+  checkpoint degrades to unloaded with the reason recorded, not an exception at import.
+- probabilities leave as **per-mille integers summing to exactly 1000**, because they
+  travel into a ledger payload where floats are banned — `rfc8785` emits `{"n":1}` for
+  `1.0` while `json.dumps` emits `{"n":1.0}`, which breaks a chain silently. Naive
+  rounding does not sum to 1000, so the largest remainder takes the slack; four
+  distributions are asserted to sum exactly.
+- `dataset.py` reads splits and **never creates them**: no shuffle, no ratio argument,
+  no `train_test_split`. `collect("test", ...)` **raises `PermissionError`** unless
+  `allow_test=True` is passed explicitly, which neither `train.py` nor the notebook ever
+  does — an accidental `split="test"` is the mistake that cannot be undone afterwards.
+  Every `collect()` returns the retained fraction, and that report immediately earned
+  itself: the first smoke run pointed `--images` at the calib directory and the report
+  showed `train: 0/219 present, retained 0.0` instead of silently training on nothing.
+- **CPU smoke, actually run:** 2 optimiser steps on 6 real APTOS images at 512px with
+  `--random-init`, train_loss 1.947, **3.1 seconds**, checkpoint written and reloaded.
+  The real `convnext_tiny` forward pass is asserted to give `(2, 5)` finite logits.
+  No full training run happened locally and none should — that is the Kaggle T4 job.
+- `notebooks/train_dr.ipynb` carries the five ml.md rules at the top, **re-checks split
+  disjointness rather than trusting it**, asserts `retained_fraction > 0.95` before
+  training, selects on calibration only, deliberately does NOT collect the test split,
+  and draws the 0.95 line on the QWK plot as a leaked-split alarm rather than a target.
+  All 15 cells are validated as parseable Python.
+- **a claim of mine that was wrong, and is corrected in the code.** I wrote that passing
+  `labels=range(5)` to kappa protects against a fold missing a grade "silently computing
+  over a smaller matrix". It does not: the quadratic weights are `(i-j)^2/(k-1)^2`, so
+  widening the label set scales every weight by one constant which cancels in
+  `1 - sum(wO)/sum(wE)`. Measured both ways on a fold missing grades 3 and 4:
+  **0.8571428571428572 either way**. The docstring now says so, and the test asserts the
+  invariance plus the fact that a single-grade fold returns **nan** with or without the
+  argument — so callers must check for nan rather than trust the parameter.
+- verified: **236 tests pass** (209 before, +27), ruff clean on this lane's files.

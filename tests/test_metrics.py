@@ -386,3 +386,54 @@ def test_abstention_report_of_an_empty_cohort_does_not_divide_by_zero():
     assert report["n_total"] == 0
     assert report["coverage"] == 0.0
     assert report["abstention_rate"] == 0.0
+
+
+# ----------------------------------------------------------- DR agreement
+
+
+def test_qwk_is_one_for_perfect_agreement_and_zero_for_chance():
+    y = np.array([0, 1, 2, 3, 4, 2, 1, 0])
+    assert m.quadratic_weighted_kappa(y, y) == pytest.approx(1.0)
+
+
+def test_qwk_penalises_a_distant_confusion_more_than_a_near_one():
+    """The reason quadratic weights are the right choice: the grades are
+    ORDERED, so calling a 0 a 4 must cost more than calling it a 1."""
+    y = np.array([0, 0, 0, 0, 4, 4, 4, 4])
+    near = np.array([1, 0, 0, 0, 4, 4, 4, 4])
+    far = np.array([4, 0, 0, 0, 4, 4, 4, 4])
+    assert m.quadratic_weighted_kappa(y, far) < m.quadratic_weighted_kappa(y, near)
+
+
+def test_qwk_is_unchanged_by_a_fold_that_lacks_a_grade():
+    """Passing labels=range(5) does NOT change the value, and the docstring
+    says so rather than implying a protection it does not give.
+
+    The quadratic weights are (i-j)^2/(k-1)^2, so widening the label set scales
+    every weight by one constant, which cancels in 1 - sum(wO)/sum(wE).
+    """
+    from sklearn.metrics import cohen_kappa_score
+
+    y = np.array([0, 0, 1, 1, 2, 2])  # no grade 3 or 4 anywhere
+    p = np.array([0, 1, 1, 1, 2, 2])
+    ours = m.quadratic_weighted_kappa(y, p)
+    inferred = cohen_kappa_score(y, p, weights="quadratic")
+    assert ours == pytest.approx(inferred)
+    assert ours == pytest.approx(0.8571428571428572)
+
+
+def test_qwk_of_a_single_grade_fold_is_nan_not_a_misleading_one():
+    """A fold where every case is the same grade has no measurable agreement.
+    Explicit labels do not rescue this, so a caller must check for nan rather
+    than publish it as 1.0 or 0.0."""
+    import warnings
+
+    y = np.array([2, 2, 2, 2])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert np.isnan(m.quadratic_weighted_kappa(y, y))
+
+
+def test_qwk_is_negative_when_predictions_invert_the_order():
+    y = np.array([0, 1, 2, 3, 4])
+    assert m.quadratic_weighted_kappa(y, y[::-1]) < 0

@@ -11,10 +11,10 @@ Verified against scikit-learn 1.9.1 / numpy 2.5.4 conventions on 2026-10-27.
 from __future__ import annotations
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, log_loss
 from scipy.optimize import minimize_scalar
-from scipy.special import logit, expit
+from scipy.special import logit
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import brier_score_loss, cohen_kappa_score, log_loss
 
 # ---------------------------------------------------------------- calibration
 
@@ -152,6 +152,39 @@ def coverage_at_risk(
     coverage, risk = risk_coverage(correct, confidence)
     ok = risk <= target_risk
     return float(coverage[ok].max()) if ok.any() else 0.0
+
+
+# ------------------------------------------------------------ DR agreement
+
+
+def quadratic_weighted_kappa(
+    y_true: np.ndarray, y_pred: np.ndarray, n_classes: int = 5
+) -> float:
+    """Quadratic weighted kappa - the headline DR grading metric.
+
+    Added for the DR backbone (SPEC.md section 2 quotes an expected 0.88-0.92 on
+    a local APTOS split). It lives here because every reported number comes from
+    this module; computing it inline in a notebook is what rules.md section 7
+    forbids.
+
+    Quadratic weights are what make this the right metric for DR: the grades are
+    ORDERED, so confusing 0 with 4 must cost more than confusing 0 with 1.
+
+    `labels` is passed explicitly for an explicit 5x5 matrix, NOT because it
+    changes the number. It does not: the weights are (i-j)^2/(k-1)^2, so adding
+    empty classes scales every weight by the same constant and that constant
+    cancels in 1 - sum(w*O)/sum(w*E). Measured both ways on a fold missing
+    grades 3 and 4: 0.8571428571428572 either way. A fold containing a SINGLE
+    grade returns nan with or without it, so callers must handle that rather
+    than rely on this argument to prevent it.
+
+    SPEC.md: anything above 0.95 on a local split means a leaked split.
+    """
+    return float(
+        cohen_kappa_score(
+            y_true, y_pred, weights="quadratic", labels=list(range(n_classes))
+        )
+    )
 
 
 # ------------------------------------------------- per-site reporting helpers
