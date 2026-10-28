@@ -455,3 +455,37 @@
   B line, but it needs no contract change: the header is already accepted.
   Nothing enforces WHO may advance a referral — there is no auth, so any caller can
   move any referral to `examined`.
+
+### 2026-10-28 — Lane A — T-06 ledger verify and checkpoint endpoints
+- what changed: `netra/ledger/checkpoint.py`, `netra/api/routes/ledger.py`,
+  `tests/test_ledger_api.py` (15 tests).
+- verified: **100 tests pass.** `GET /v1/ledger/verify` is driven against a CORRUPTED
+  chain through the HTTP surface, not only a clean one: three encounters posted, entry 2
+  corrupted, endpoint returns exactly `{"ok": false, "first_bad_index": 2}`. A deleted
+  entry is reported too (as index 3, where 2 should have been). The response carries
+  **exactly the two frozen fields** — the internal `reason` string is asserted NOT to
+  leak. `GET /v1/ledger/checkpoint` returns exactly the frozen five
+  (`idx, head_hash, ts, signature, signer_kid`), attests the real current head
+  (`idx == head.seq`, `head_hash == head.entry_hash`), and **its signature verifies from
+  the response alone** — the test reconstructs the signed bytes from the JSON the way an
+  external holder would. Claiming `idx + 1` over the same signature fails, which is the
+  rewrite a checkpoint exists to catch. Reading twice at an unchanged head returns the
+  identical checkpoint (re-signing would need an UPDATE the append-only trigger refuses,
+  also asserted); the checkpoint moves when the head moves. An empty chain gives
+  `idx: 0` with the genesis hash.
+  The headline test is `test_an_old_checkpoint_still_proves_a_rewrite`: entry 3 is
+  rewritten, re-chained AND re-signed with the real device key, so `verify` returns
+  **ok:true again** — the attack a bare chain cannot catch — and the previously issued
+  checkpoint is what exposes it, because it attests a head hash the rewritten chain no
+  longer has. That is the Certificate-Transparency argument, now a test rather than a
+  claim in a slide.
+- decisions: a checkpoint is signed **on read**, not on a timer, and by `SERVER_KID`
+  (`server-1`) rather than a device key — a checkpoint attests a server-side fact about
+  the chain head, so it is deliberately NOT a `devices` row; verification resolves its
+  public key from `keys/server-1.pub`. **No endpoint corrupts the ledger**, and none will:
+  the nine are frozen and a "rewrite history" route in a deployed build is a liability.
+  T-17 drives `python -m netra.ledger.tamper --seq N` beside the Ledger view.
+- unverified / TBD: nobody external actually HOLDS a checkpoint yet — the proof only
+  works if a checkpoint is exported and kept off-box, which is a demo-script step, not
+  code. No Merkle tree, by SPEC.md §4's explicit instruction. Checkpoint rows accumulate
+  one per distinct head that is read; nothing prunes them.

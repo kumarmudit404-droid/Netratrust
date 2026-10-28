@@ -24,7 +24,7 @@ B (Frontend), C (ML & Evaluation).
 | T-03 | Ledger: hash chain + Ed25519 + rfc8785 write/verify | A | done | T-02 |
 | T-04 | `POST /v1/encounters` (append-before-return) + CORS + idempotency | A | done | T-03 |
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | done | T-03 |
-| T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | todo | T-03 |
+| T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | done | T-03 |
 | T-07 | Site status, metrics, queue-depth endpoints | A | todo | T-02 |
 | T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | todo | T-01 |
 | T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | todo | split frozen |

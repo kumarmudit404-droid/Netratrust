@@ -24,7 +24,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from netra.api.deps import AppState
-from netra.api.routes import encounters, referrals
+from netra.api.routes import encounters, ledger, referrals
 from netra.db.engine import init_db
 from netra.ledger.keys import KeyStore
 
@@ -80,6 +80,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(encounters.router)
     app.include_router(referrals.router)
+    app.include_router(ledger.router)
     _assert_handlers_are_sync(app)
     return app
 
