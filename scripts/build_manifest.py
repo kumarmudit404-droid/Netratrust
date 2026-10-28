@@ -5,14 +5,10 @@
 The manifest columns are fixed by `make_splits.py`:
 `image_id, patient_id, source, label`.
 
-**APTOS publishes no patient identifier.** It ships `id_code, diagnosis` and
-nothing else, so `patient_id` is set to the image id. That makes the
-patient-level guarantee in `.claude/rules/ml.md` VACUOUS for this corpus: the
-splitter cannot keep a patient's images together because it cannot tell which
-images share a patient. This is recorded rather than papered over — if two
-APTOS rows are the same patient's two eyes, they can land in different folds
-and nothing here would catch it. A corpus that does publish patient ids (IDRiD,
-EyePACS) must pass the real one.
+**APTOS publishes no patient identifier.** The consequences are spelled out in
+`netra.models.splits.read_aptos_labels`, which is where the reading now lives
+so that this script, `scripts/extend_splits.py` and the Kaggle notebook share
+one implementation.
 
 Every filtering step prints its retained fraction, per `.claude/rules/ml.md`:
 "reasonable" preprocessing has been documented to silently discard 80-94% of
@@ -22,82 +18,49 @@ public corpora, and the only defence is counting out loud.
 from __future__ import annotations
 
 import argparse
-import csv
-import hashlib
-from pathlib import Path
+import pathlib
+import sys
 
-VALID_LABELS = {"0", "1", "2", "3", "4"}
+# `scripts/` is not a package and this file imports `netra`, so the repo root
+# has to be on sys.path when it is run directly as `python scripts/...`.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-
-def read_aptos(path: Path) -> list[dict[str, str]]:
-    """APTOS `id_code,diagnosis` -> manifest rows, counting what is dropped."""
-    with path.open(newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
-
-    if not rows:
-        raise SystemExit(f"{path} has no rows")
-    required = {"id_code", "diagnosis"}
-    missing = required - set(rows[0])
-    if missing:
-        raise SystemExit(f"{path} missing columns: {sorted(missing)}")
-
-    kept: list[dict[str, str]] = []
-    dropped_label = 0
-    dropped_dupe = 0
-    seen: set[str] = set()
-    for r in rows:
-        image_id = r["id_code"].strip()
-        label = r["diagnosis"].strip()
-        if label not in VALID_LABELS:
-            dropped_label += 1
-            continue
-        if image_id in seen:
-            dropped_dupe += 1
-            continue
-        seen.add(image_id)
-        kept.append(
-            {
-                "image_id": image_id,
-                # No patient id exists in APTOS. See the module docstring.
-                "patient_id": image_id,
-                "source": "aptos",
-                "label": label,
-            }
-        )
-
-    print(f"aptos: read {len(rows)} rows from {path}")
-    print(f"aptos: dropped {dropped_label} with a label outside 0-4")
-    print(f"aptos: dropped {dropped_dupe} duplicate image_ids")
-    print(f"aptos: retained {len(kept)}/{len(rows)} = {len(kept) / len(rows):.4f}")
-    return kept
+from netra.models.splits import (
+    merge_manifest_rows,
+    read_aptos_labels,
+    write_manifest,
+)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--aptos", type=Path, action="append", default=[])
-    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--aptos", type=pathlib.Path, action="append", default=[])
+    ap.add_argument("--out", required=True, type=pathlib.Path)
     args = ap.parse_args()
 
-    rows: list[dict[str, str]] = []
+    groups = []
     for path in args.aptos:
-        rows.extend(read_aptos(path))
+        try:
+            rows, report = read_aptos_labels(path)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"aptos: read {report['n_rows']} rows from {path}")
+        print(f"aptos: dropped {report['dropped_bad_label']} with a label outside 0-4")
+        print(f"aptos: dropped {report['dropped_duplicate_id']} duplicate image_ids")
+        print(
+            f"aptos: retained {report['n_kept']}/{report['n_rows']} = "
+            f"{report['retained_fraction']:.4f}"
+        )
+        groups.append(rows)
 
-    if not rows:
+    if not groups:
         raise SystemExit("no rows; pass at least one --aptos CSV")
+    rows = merge_manifest_rows(groups)
+    if not rows:
+        raise SystemExit("no rows survived; nothing to write")
 
-    # image_id must be globally unique across corpora, or a split lookup is
-    # ambiguous. Prefix-free corpora are not guaranteed, so this is checked.
-    ids = [r["image_id"] for r in rows]
-    if len(set(ids)) != len(ids):
-        raise SystemExit("duplicate image_id across corpora; prefix them by source")
+    digest = write_manifest(rows, args.out)
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=["image_id", "patient_id", "source", "label"])
-        w.writeheader()
-        w.writerows(sorted(rows, key=lambda r: r["image_id"]))
-
-    digest = hashlib.sha256(args.out.read_bytes()).hexdigest()
     by_label: dict[str, int] = {}
     by_source: dict[str, int] = {}
     for r in rows:
