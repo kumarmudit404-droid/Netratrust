@@ -35,7 +35,7 @@ B (Frontend), C (ML & Evaluation).
 | T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | done | T-13 |
 | T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | T-07 |
-| T-17 | Ledger route: verify + checkpoint display | B | todo | T-06 |
+| T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7 | B | todo | T-06 |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
 | T-19 | Offline capture queue + sync (idempotency key) | A | todo | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |

@@ -210,3 +210,61 @@
   end cannot read at runtime — flagged `TODO(Lane A)` to serve them from the API.
   `SIM_MODEL_VERSION` is a placeholder, not a trained checkpoint. The abstention queue
   itself (a list of abstained cases) is not built — only the single-case Abstain view.
+
+### 2026-10-28 — Lane B — First browser pass on T-14/T-15, and SPEC §7 view-list amendment
+- what changed (browser pass, commit `435e190`): `npm run dev` was run and the two built
+  screens were driven in Chrome for the first time. Four defects, none of which the test
+  suite could reach. (1) `src/lib/utils.ts` — `cn()` used bare `twMerge`, which does not
+  know our custom `fontSize` scale, so it classified `text-subhead` / `text-caption` as
+  text COLOURS and put them in the same conflict group as `text-bg` / `text-abstain`;
+  the later class silently won. The "Select fundus image" primary button shipped as
+  `--text` on `--text` — **contrast 1:1, the label was invisible**. Fixed with
+  `extendTailwindMerge` declaring the five scale steps; new `src/lib/utils.test.ts`
+  (5 tests) pins both directions. (2) `routes/Capture.tsx` — the `sr-only`
+  `<input type=file>` was still tabbable, so a keyboard user landed on an invisible
+  control with no focus ring; now `tabIndex={-1}` + `aria-hidden`. (3) `routes/Grade.tsx`
+  — abstain was announced more quietly than reject (13px badge over a paragraph, with
+  `<h2>` reading "Abstained" rather than the message) against design.md §1; both Grade
+  outcomes now use the VerdictPanel treatment — status icon + 30px display headline +
+  status-coloured border. (4) `src/index.css` + `design.md` §2 — `--borderline` `#9A6700`
+  measures **4.49:1 on `--surface`**, under AA, and is used at caption size on cards
+  (the simulated-gate legend, the "grade is provisional" note), which is exactly what
+  index.css's own comment told us not to do; darkened to `#926300` (5.24 on `--bg`,
+  4.84 on `--surface`). `routes/Grade.tsx` also now shows the queue-depth pending count
+  on the abstain state.
+- what changed (amendment, its own commit): `SPEC.md` §7's five views changed from
+  "capture + gate verdict; abstention queue; performance dashboard; ledger verification
+  + tamper demo; offline queue indicator" to the built IA — **Capture, Grade/Abstain,
+  Referrals, Sites (performance), Ledger** — each with a one-line description, plus an
+  inline note naming the superseded wording and dated 2026-10-28. Three substantive
+  intents from the old wording were preserved as explicit bullets: the Ledger view MUST
+  carry the tamper demo (append → corrupt one entry → `verify` returns `ok:false` with
+  `first_bad_index`), tracked as T-17; offline/pending-sync visibility is the `<TopNav/>`
+  strip fed by `GET /v1/queue/depth`, which **replaces** the standalone "offline queue
+  indicator" view; and the abstain state routes to human review and shows the pending
+  count from `GET /v1/queue/depth`, with **no** separate abstention-queue view and **no**
+  new list endpoint. `tracker.md` T-17 widened to name the tamper demo.
+- verified: `npm run build` and `npm test` green after every fix — **28 tests, 4 files**
+  (23 before, +5 for `cn`). In Chrome at 1431×840: the Reject screen shows "No result —
+  take again", the reason code and score, "Take another image" as the primary action,
+  and asserted-by-script **no grade, no prediction set, no referral control**; the
+  abstain `{1,2}` screen shows "A doctor should check this." as a 30px `--abstain`
+  headline and states the case is routed for specialist review, not a dead end. Focus
+  order walked with real Tab presses: nav ×5 → Select fundus image → scenario select →
+  Take another image → Cannot retake, with the hidden input skipped and a visible ring
+  on each. Contrast re-measured **in situ** against both `--bg` and `--surface` with the
+  WCAG 2.1 formula; `--borderline` was the only sub-AA case and is fixed. §7 re-read
+  after editing: the only remaining instances of "abstention queue" and "offline queue
+  indicator" are inside the deliberate "this replaces…" quotation. The nine-endpoint API
+  table and the referral state machine were **not** touched.
+- unverified / TBD: the pending count on the abstain state is the **device's unsynced
+  record depth**, which is what `GET /v1/queue/depth` returns — it is NOT a count of
+  cases awaiting a specialist, and is worded that way on screen and in §7 so no one
+  reads a clinical backlog into it. If a true specialist-review backlog is ever wanted
+  it needs a Lane A decision, and under the frozen nine there is no endpoint for it.
+  Everything on screen is still **mock data** (`VITE_USE_MOCK=1`); the app has still
+  never run against the real API and **CORS is still a Lane A task**. Only the light
+  theme was looked at — dark-theme status hues remain **TBD — verify**, and the
+  `--borderline` change has not been re-measured for dark. Only one viewport (1431×840)
+  was checked; no phone/tablet width was exercised, though the camp device is a tablet.
+  `Referrals`, `Sites` and `Ledger` are still routed stubs and were not opened.

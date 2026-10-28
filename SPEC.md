@@ -96,9 +96,41 @@ Custom front end in `netra/ui`: Vite + React + TypeScript PWA — Tailwind CSS,
 shadcn/ui, TanStack Query, Recharts, vite-plugin-pwa, Framer Motion. Front-end
 dependencies are pinned in `netra/ui/package.json`, not `requirements.txt`.
 Amended 2026-10-27 by agreement; superseded Streamlit 1.66.1 + Plotly 7.1.0.
-Five views: capture + gate verdict; abstention queue; performance dashboard;
-ledger verification + tamper demo; offline queue indicator.
 
+Five views, as routes under one `<TopNav/>` shell:
+
+1. **Capture** — image in, gate verdict out. A `reject` is "no result": it shows
+   the cause, offers recapture as the primary action, and renders no grade, no
+   prediction set and no referral control.
+2. **Grade / Abstain** — the grade, or ABSTAIN when the prediction set spans
+   more than one clinical action class (section 3). See the abstain rule below.
+3. **Referrals** — referrals and their current state; actions follow the state
+   machine at the end of the API contract and nothing else.
+4. **Sites** — per-site performance and drift. This is the performance
+   dashboard.
+5. **Ledger** — verification, the signed checkpoint, and the tamper demo.
+
+Amended 2026-10-28 by agreement. The list above replaces "capture + gate
+verdict; abstention queue; performance dashboard; ledger verification + tamper
+demo; offline queue indicator", which named two views that do not exist as
+views. What that wording required is preserved, and is now stated as follows.
+
+- **The Ledger view MUST carry the tamper demo**, not merely a verify button:
+  append entries, corrupt one entry in place, and show `GET /v1/ledger/verify`
+  returning `ok:false` with the `first_bad_index` of the corrupted entry. A
+  verify button that has only ever returned `ok:true` does not demonstrate
+  tamper-evidence. Tracked as T-17.
+- **Offline / pending-sync visibility is a persistent strip in `<TopNav/>`**,
+  fed by `GET /v1/queue/depth` and visible on every view. This replaces the
+  standalone "offline queue indicator" view: a status that must be true on all
+  five screens is a shell element, not a sixth screen. Offline is normal for
+  this app, so the strip is never an error state.
+- **The abstain state routes to human review**, and shows the pending count from
+  `GET /v1/queue/depth` — that endpoint's unsynced-record depth, the same figure
+  the TopNav strip shows, and not a count of cases a specialist has yet to read,
+  which we do not measure. There is **no separate abstention-queue view** and
+  **no new list endpoint**: the nine endpoints in the API contract are frozen and
+  stand unchanged. A clinician decides; no referral is issued from an abstention.
 - Per-site view: forest plot of Wilson intervals against the pooled line.
   Doubles as the drift monitor. Avoid violins — KDE invents structure at
   realistic per-site n.
