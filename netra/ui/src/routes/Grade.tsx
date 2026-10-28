@@ -90,7 +90,7 @@ export default function Grade() {
     setError(null)
     try {
       const res = await createReferral.mutateAsync(current.encounterId)
-      patchCurrent({ referralId: res.referral_id })
+      patchCurrent({ referralId: res.referral_id, referralState: res.state })
     } catch (e) {
       setError(
         e instanceof ApiError ? `${e.status} — ${e.message}` : "Could not issue referral.",

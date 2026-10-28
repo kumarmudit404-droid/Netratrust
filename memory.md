@@ -742,3 +742,36 @@
 - lesson recorded rather than quietly fixed: a test-only file can break the BUILD,
   because `tsc -b` type-checks `src/**` including tests. `npm test` passing says nothing
   about `npm run build`. Both gates, every commit.
+
+### 2026-10-28 — Lane B — Referrals view wired to the state machine (stretch item 6)
+- what changed: `src/lib/referralMachine.ts` (the frozen machine as a table) +
+  `referralMachine.test.ts` (14 tests), `src/routes/Referrals.tsx` (was the last stub),
+  `src/state/encounter.tsx` gained `referralState`, and `Grade.tsx` now stores
+  `res.state` alongside `res.referral_id` when it issues one.
+- the honest limitation, stated ON SCREEN rather than hidden: **there is no list
+  endpoint** in the frozen nine, so this view can only show the referral raised in THIS
+  session, tracked from the create and patch RESPONSES. The empty state says so and
+  points at the ledger as the durable record. No new endpoint was invented, and none is
+  needed.
+- verified: `npm run build` and `npm test` green — **92 passed / 10 skipped, 11 files**
+  (80 before, +12). The machine is asserted against the contract in both directions:
+  exactly the forward move plus `abandoned` from each live state; `contact_attempted`
+  appears as a target of ITSELF (repeatable); terminal states offer nothing; **no skip**
+  is ever offered (`issued` never reaches `contacted` or `examined`); and every offered
+  target is one of the frozen six. `canSubmit` gates on the required field —
+  `contact_attempted` needs a channel (whitespace does not count), `abandoned` needs a
+  reason — and a move the machine forbids can never submit however well filled in.
+  `abandoned` is asserted to sit **off** the happy path (`pathIndex` null) so it is never
+  rendered as "step 5 of 5", which would read as a successful outcome.
+  Built-CSS check: `border-l-text`, `border-l-usable`, `text-usable`, `opacity-60`,
+  `max-w-sm`, `border-dashed` all emit.
+- `TODO(review)` in `src/lib/referralMachine.ts`: it mirrors
+  `netra/api/referral_state.py`. The SERVER is authoritative and 409s an illegal move
+  regardless; duplicating the table client-side only stops the UI offering a button that
+  is guaranteed to fail. If the two disagree, the server wins and the client file is the
+  bug — `live.test.ts` walks the real machine, which is what would catch the drift.
+- unverified / TBD: not rendered in a browser. The progress list is a flex-wrapped
+  `<ol>` with five items, which is the most likely thing to look wrong at 375px, and it
+  has not been seen. Advancing a referral needs the case still in memory — a page reload
+  clears it and the view returns to its empty state, which is correct given there is no
+  GET for a referral but will surprise anyone who reloads mid-demo.

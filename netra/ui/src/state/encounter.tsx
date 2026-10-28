@@ -7,7 +7,7 @@
  */
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react"
-import type { GateVerdict, Grade } from "@/lib/api/types"
+import type { GateVerdict, Grade, ReferralState } from "@/lib/api/types"
 
 export interface CurrentCase {
   /** SHA-256 of the captured image, computed on-device. The bytes never leave. */
@@ -24,6 +24,9 @@ export interface CurrentCase {
   ledgerIdx?: number
   /** Set once POST /v1/referrals has returned. */
   referralId?: string
+  /** The referral's current state, from the create/patch RESPONSES. There is
+   *  no GET for a referral in the frozen nine, so this is the only source. */
+  referralState?: ReferralState
 }
 
 interface Ctx {
