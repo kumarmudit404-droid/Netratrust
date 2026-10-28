@@ -78,14 +78,18 @@ export const mock = {
 
   async siteStatus(siteId: string): Promise<SiteStatusResponse> {
     await delay()
+    // site-11 has never passed an audit, so it exercises Lane A's "unpinned"
+    // sentinel and the "no audited model yet" rendering. Without one such
+    // site in the mock, that branch is only ever seen against the real API.
+    const unaudited = siteId === "site-11"
     // n = 27 on purpose: below min_n_for_rate (30), so the n<30 rule is
     // exercised by default rather than only in an edge case.
     return {
       site_id: siteId,
-      model_version: MODEL_VERSION,
-      last_audit: new Date().toISOString(),
+      model_version: unaudited ? "unpinned" : MODEL_VERSION,
+      last_audit: unaudited ? null : new Date().toISOString(),
       gradability: { k: 22, n: 27, ci: [0.633, 0.9182] },
-      drift_flag: false,
+      drift_flag: siteId === "site-07",
     }
   },
 

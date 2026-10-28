@@ -601,3 +601,55 @@
   every token class a new component uses, because Tailwind drops unknown classes
   silently — the check that caught a 1:1-contrast invisible button in the last pass.
   A human browser pass at 1280 and 375 is still owed on Sites and Ledger.
+
+### 2026-10-28 — Lane B — T-16 Sites view: per-site forest plot
+- what changed: `src/lib/forest.ts` (data shaping) + `forest.test.ts` (12 tests),
+  `src/components/ForestPlot.tsx` (Recharts ScatterChart + ErrorBar + ReferenceLine) +
+  `ForestPlot.ssr.test.ts` (8 tests), `src/routes/Sites.tsx` (was a stub).
+  `queries.ts` gained `refetchInterval` on `useSiteStatus`. `mock.ts` now returns
+  `model_version: "unpinned"` and `last_audit: null` for **site-11**, and
+  `drift_flag: true` for site-07, so both branches are visible against the mock.
+- design decisions, each traceable to a rule rather than taste:
+  - **Two panels, not one chart with two series.** Gradability gets the pooled dashed
+    reference line because Lane A sends pooled counts for it. Abstention gets **none**,
+    and the screen says why on the card: averaging the per-site abstention rates would
+    be exactly the mean SPEC.md forbids. Inventing that line was the easy wrong move.
+  - **Ordered by n, not by rate.** Ranking sites by a proportion invites reading the top
+    row as "the worst site" when the gap is sampling noise. Small-n sites sort last and
+    are marked `n<30`.
+  - **Denominators are stated in prose on each card** — gradability counts rejects in
+    the denominator; abstention counts admitted images only, because a rejected image
+    was never graded. These are the two numbers easiest to misread.
+  - A site with **n = 0 is not plotted at zero**; it stays in the counts table and a
+    line below the table names it. Plotting it would put a fake 0% on the chart.
+- verified: `npm run build` and `npm test` green — **64 tests, 8 files** (44 before).
+  The error-bar offsets are asserted to **reconstruct the server's interval exactly**
+  (`est - lowOffset == ci[0]`), and negative offsets are clamped so an inconsistent
+  server interval cannot render as a backwards spike. `pooledEstimate` is asserted to be
+  summed counts (258/348 = 0.7414) and **not** the mean of the per-site rates (0.7727) —
+  the two differ, which is the point. Every point label goes through `formatRate`, and
+  `ForestTooltip` is server-rendered and asserted to print "140/203 (0.62-0.75)" at
+  n≥30, "22 of 27" plus "n below 30" below it, and **no "%" at either n**. Drift is
+  named in words ("drift flagged"), not carried by colour alone.
+  Built-CSS check (Tailwind drops unknown classes silently): `border-l-reject`,
+  `text-borderline`, `animate-spin`, `.tabular`, `decoration-border-subtle`,
+  `focus-visible:ring-offset-surface`, `sm:grid-cols-2` and `xl:grid-cols-2` all emit
+  real rules, and the `@media(min-width:1280px)` block is present.
+- a test that looked strong and tested nothing, now fixed: under SSR Recharts'
+  `ResponsiveContainer` measures zero width and renders an **empty** container, so the
+  plot body is absent from the markup. "No % in the chart markup" therefore passed
+  while asserting nothing — and worse, it initially FAILED by matching
+  ResponsiveContainer's own `width:100%` inline style. The figures-to-text assertion was
+  moved to `ForestTooltip`, which does render, and the SSR limitation is written into
+  the test file so no one re-adds the vacuous version.
+- unverified / TBD: **no screen was rendered in a browser** — the Chrome extension is
+  not connected this session, so layout, the plot's visual correctness, focus order and
+  in-situ contrast on this view are all still owed. SSR proves only that it does not
+  throw. Recharts took the bundle from **369 kB to 776 kB** (gzip 118 → 231 kB), over
+  Vite's 500 kB warning; acceptable for a pinned-stack demo but it is the obvious
+  code-splitting target if the camp tablet's first load matters.
+  `TODO(review)` in `src/lib/forest.ts`: a plotted marker is a visual proportion even at
+  n<30. design.md §7 forbids a bare PERCENTAGE, and a point shown with its wide Wilson
+  interval is the honest alternative that rule prefers, so small-n sites are plotted,
+  flagged and labelled "k of n" — but if the team wants them suppressed entirely from
+  the plot, that is a one-line change in `toForestPoints`.

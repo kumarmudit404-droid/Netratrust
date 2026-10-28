@@ -40,6 +40,7 @@ export function useSiteStatus(siteId: string) {
   return useQuery({
     queryKey: keys.siteStatus(siteId),
     queryFn: () => api.siteStatus(siteId),
+    refetchInterval: LIVE_MS,
   })
 }
 
