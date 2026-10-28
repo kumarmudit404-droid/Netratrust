@@ -26,11 +26,11 @@ B (Frontend), C (ML & Evaluation).
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | done | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | done | T-03 |
 | T-07 | Site status, metrics, queue-depth endpoints | A | done | T-02 |
-| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | todo | T-01 |
-| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | todo | split frozen |
-| T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | todo | T-09 |
-| T-11 | Fit thresholds on **calibration split only**; write `thresholds.yaml` | C | todo | T-10 |
-| T-12 | Unit-test remaining metrics functions | C | todo | T-01 |
+| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | blocked | EyeQ unobtainable (labels reference EyePACS ~89GiB). Code + synthetic-head stand-in done; needs a quality-labelled corpus |
+| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | doing | splits frozen; code + `notebooks/train_dr.ipynb` ready, CPU-smoked. **Needs the GPU run** |
+| T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | done | tested on synthetic probabilities; conformalise on real ones after T-09 |
+| T-11 | Fit thresholds on **calibration split only**; write `thresholds.yaml` | C | doing | fitter built + run; it REFUSED to write (one-sided scores). Placeholders stand — see memory.md |
+| T-12 | Unit-test remaining metrics functions | C | done | T-01 |
 | T-13 | React PWA scaffold + shell: Vite/TS, Tailwind tokens, shadcn/ui, TanStack Query, vite-plugin-pwa, `<TopNav/>` + five routes, typed API client (mock responder) | B | done | Node (installed) |
 | T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | done | T-13 |
 | T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |

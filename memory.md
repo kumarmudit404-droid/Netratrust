@@ -1234,3 +1234,79 @@ deployed, nothing pushed.
   `"unloaded"` because no DR checkpoint exists. That is the correct behaviour end to end.
 - verified: **303 tests pass** (288 before, +15), ruff and ruff-format clean, each run as
   its own command.
+
+### 2026-10-28 — Lane C — Unattended run summary
+Backlog worked in order, all seven steps. **303 tests pass** (178 at the start of this
+lane's work; +125). Lane C touched only `netra/models`, `netra/eval`, `notebooks`,
+`scripts`, `data/splits`, `tests/*` for its own modules, plus `tracker.md`/`memory.md`.
+`netra/api`, `netra/ui`, `netra/db` and `netra/ledger` were **not modified** — only
+imported read-only in cross-lane tests.
+
+**Commits, in order:**
+1. `4b2982e` — real APTOS labels, frozen patient-level splits, split invariant tests.
+2. `0b31a4f` — revert: restore Lane A's `gen_device_key.py` formatting (cross-lane slip).
+3. `72984e6` — **T-12** every function in `metrics.py` covered (38 tests).
+4. `2eb11a3` — QuickQual quality gate that refuses rather than guesses.
+5. `acf2df2` — DR backbone, frozen-split dataset, CPU-smokeable trainer, Kaggle notebook.
+6. `ed2ed99` — conformal abstention (**mis-verified, see 7**).
+7. `4345d1a` — fix C401 + record what `ed2ed99` got wrong.
+8. `212c326` — threshold fitter that ran and then refused to write.
+9. `7c4e2c8` — **T-07** inference entrypoint that never invents a grade.
+
+**What is REAL vs SYNTHETIC — the thing to read before quoting any number:**
+- **Real:** 366 APTOS images with real 5-class labels (`mariaherrerot/aptos2019`,
+  sha256 `ddb19e46…`); frozen splits train 219 / calib 75 / test 72 at seed 20261027;
+  83 real images on disk (75 calib + 8 train); real pretrained `densenet121.tv_in1k`
+  weights; real `convnext_tiny` forward/backward passes on CPU.
+- **Synthetic:** the quality head (fitted on blur / under-exposure / clipped-FOV
+  degradations of real images — a human never judged them); every conformal coverage
+  number (synthetic probabilities whose labels were drawn from them); the fundus
+  fixtures in `tests/test_quality.py`.
+- **Not measured at all:** DR accuracy or QWK, gate accuracy, abstention rate on real
+  data. **No trained DR checkpoint exists.** No number in this lane is a result.
+
+**`TODO(review)` markers left (5):**
+- `scripts/make_splits.py` behaviour, recorded in memory: its docstring and ml.md claim a
+  source corpus is kept whole in one fold, but it buckets on `patient_id` only. Moot with
+  one corpus; changing it would re-pick the splits, which rules.md §6 makes a stop-and-ask.
+- `netra/models/quality.py` — QuickQual-MEME's 10 published parameters are not
+  transcribed, so that fallback refuses rather than improvising them.
+- `netra/models/reason_codes.py` — the four classical cut-points are uncalibrated; no
+  published absolute Laplacian threshold for fundus images exists (SPEC.md §1).
+- `netra/models/fit_thresholds.py` header text — the cut-points it would write are
+  provisional quantiles, not a boundary fitted against quality labels.
+- `netra/models/abstain.py` / `netra/eval/metrics.py` — see the two CLAUDE.md corrections
+  below; those are root-doc edits for the team, not Lane C's to make.
+
+**Three documented errors found in the project's own docs, each now pinned by a test:**
+1. CLAUDE.md: MAPIE's flow is **not** `fit -> conformalize -> predict_set`. With
+   `prefit=True`, `fit()` **raises**; it is `conformalize -> predict_set`.
+2. CLAUDE.md: `predict_set` returns a **tuple** `(points, sets)`; the 3-D bool array is
+   the second element.
+3. A claim **I** wrote and then disproved: `labels=range(5)` does not protect kappa
+   against a fold missing a grade — the constant weight factor cancels, measured
+   identical (0.8571428571428572) both ways.
+
+**New library gotcha not in CLAUDE.md:** `SVC(probability=True)` is deprecated in
+scikit-learn 1.9 and **removed in 1.11**. Replaced with
+`CalibratedClassifierCV(SVC(), ensemble=False, method="sigmoid")`.
+
+**What still needs the Kaggle GPU run (T-09), in order:**
+1. Run `notebooks/train_dr.ipynb` on a T4 → a real checkpoint with `trained: true`.
+2. Conformalise on the **calibration** fold with real probabilities (notebook §6).
+3. Re-run `python -m netra.models.fit_thresholds` — it will still refuse the quality
+   cut-points without a quality-labelled corpus, which is correct.
+4. Touch the **test** split exactly once, at the very end. Expect QWK 0.88–0.92;
+   above 0.95 means a leaked split.
+
+**Deliberately not done:** no full local training (no GPU, and the brief forbids it);
+EyePACS never downloaded; the 8.6 GiB APTOS mirror never pulled in full (per-file
+fetching got 83 images, which is what a CPU box can use); `config/thresholds.yaml`
+unchanged; `requirements.txt` unchanged (the `kaggle` CLI is a subprocess, never an
+import, so it was not added).
+
+**Process lesson worth keeping:** `ed2ed99` landed with a ruff error and a commit message
+claiming a pytest count that had not been observed, because lint/test/commit were chained
+into one shell line and the `&&` guard did not hold as read. Every later commit ran its
+gates as separate commands. A commit message is a claim; an unverified claim in history
+is worse than a visible red commit.
