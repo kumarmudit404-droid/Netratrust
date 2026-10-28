@@ -33,16 +33,17 @@ for text.
 | `--text` | `#111827` | `--bg` | 17.74:1 | body text |
 | `--text-muted` | `#4B5563` | `--bg` | 7.56:1 | captions |
 | `--usable` | `#1B7F4B` | `--bg` | 5.02:1 | Usable / grade-0 text + icon |
-| `--borderline` | `#9A6700` | `--bg` | 4.87:1 | Borderline text |
+| `--borderline` | `#926300` | `--bg` | 5.24:1 | Borderline text |
 | `--reject` | `#B42318` | `--bg` | 6.57:1 | Reject / refer text |
 | `--abstain` | `#5B4BC4` | `--bg` | 6.46:1 | Abstention text |
 | `--border-subtle` | `#D0D5DD` | `--bg` | 1.47:1 *(decorative)* | card borders only |
 
-Every status token also clears AA on `--surface`: text 16.37, muted 6.98, usable 4.63,
-borderline 4.49\*, reject 6.07, abstain 5.97. \*`--borderline` on `--surface` is 4.49,
-a hair under 4.5 — use `--borderline` on `--bg`, or at ≥ 18.66 px bold / 24 px where the
-3:1 large-text threshold applies. Status text is not placed on `--surface` below that
-size.
+Every status token clears AA on `--surface` at any size: text 16.37, muted 6.98,
+usable 4.63, borderline 4.84, reject 6.07, abstain 5.97. `--borderline` was `#9A6700`
+and measured 4.49 on `--surface`, a hair under 4.5; because it is used at caption size
+on cards (the simulated-gate legend, the "grade is provisional" note), it was darkened
+to `#926300` rather than the size caveat being carried. Measured in situ in the browser
+on 2026-10-28, not estimated.
 
 Dark theme flips `--bg`→`#0B0F14`, `--surface`→`#161B22`, `--text`→`#E6EDF3`
 (16.27:1 on `--bg`, 14.64:1 on `--surface` — both AAA). The light status hues do **not**
@@ -60,7 +61,7 @@ a component.
 :root {
   --bg: #FFFFFF;  --surface: #F4F6F8;
   --text: #111827; --text-muted: #4B5563;
-  --usable: #1B7F4B; --borderline: #9A6700;
+  --usable: #1B7F4B; --borderline: #926300;
   --reject: #B42318; --abstain: #5B4BC4;
   --border-subtle: #D0D5DD;
 }

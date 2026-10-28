@@ -3,20 +3,27 @@
 @tailwind utilities;
 
 /* Colour tokens from design.md section 2. Contrast ratios are measured with the
-   WCAG 2.1 relative-luminance formula, against --bg unless stated.
-     --text        17.74:1    --text-muted  7.56:1
-     --usable       5.02:1    --borderline  4.87:1
-     --reject       6.57:1    --abstain     6.46:1
-     --border-subtle 1.47:1  (decorative - borders/fills only, never text)
-   --borderline on --surface is 4.49:1, a hair under AA for normal text, so
-   status text is not placed on --surface below large-text size. */
+   WCAG 2.1 relative-luminance formula, on --bg AND on --surface, because status
+   text sits on cards as often as on the page.
+                    on --bg   on --surface
+     --text           17.74        16.37
+     --text-muted      7.56         6.98
+     --usable          5.02         4.63
+     --borderline      5.24         4.84
+     --reject          6.57         6.07
+     --abstain         6.46         5.97
+     --border-subtle   1.47         1.36  (decorative - never text)
+   --borderline was #9A6700, which measured 4.49:1 on --surface - under AA. It
+   is used at caption size on cards (the simulated-gate legend, the "grade is
+   provisional" note), so it was darkened to #926300 rather than the rule being
+   restated. Every status token now clears AA at any size on both surfaces. */
 :root {
   --bg: #ffffff;
   --surface: #f4f6f8;
   --text: #111827;
   --text-muted: #4b5563;
   --usable: #1b7f4b;
-  --borderline: #9a6700;
+  --borderline: #926300;
   --reject: #b42318;
   --abstain: #5b4bc4;
   --border-subtle: #d0d5dd;

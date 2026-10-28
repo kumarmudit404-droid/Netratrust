@@ -113,11 +113,16 @@ export default function Capture() {
               uploaded — only its hash, the decisions and the metadata.
             </p>
 
+            {/* The visible Button is the control. sr-only alone would leave this
+                input in the tab order with no visible focus ring, so a keyboard
+                user would land on nothing. */}
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
               className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
               onChange={(e) => {
                 const f = e.target.files?.[0]
                 if (f) void onPick(f)
