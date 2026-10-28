@@ -489,3 +489,58 @@
   works if a checkpoint is exported and kept off-box, which is a demo-script step, not
   code. No Merkle tree, by SPEC.md §4's explicit instruction. Checkpoint rows accumulate
   one per distinct head that is read; nothing prunes them.
+
+### 2026-10-28 — Lane A — T-07 site status, audit, per-site metrics, queue depth; and the Lane B glue
+- what changed: `netra/api/routes/sites.py` (all four endpoints), `tests/test_sites.py`
+  (21 tests), `tests/test_integration.py` (11 tests against Lane B's typed client).
+- **Lane B's three `TODO(Lane A)` shapes are MATCHED, not approximated.** `types.ts` is
+  read-only to this lane and `test_integration.py` parses it and compares field names to
+  the live responses, so the two sides cannot drift silently:
+  1. `GET /v1/sites/{id}/status` returns `gradability` as **`{k, n, ci}`** — counts plus
+     a Wilson interval, never a bare rate — exactly as their `RateCounts` and their
+     TODO asked.
+  2. `GET /v1/queue/depth`'s `attempts` element type is settled as
+     **`{key, endpoint, status, created_at}`** (their `unknown[]` can now be typed).
+  3. `POST /v1/sites/{id}/audit`'s payload is settled as **`pinned_model_version,
+     gradable_k, gradable_n, agreement_k, agreement_n, grade_counts, drift_flag`** — all
+     counts, because the payload is appended to the ledger and floats are banned there.
+  The other six shapes are pinned the same way, plus three cross-lane checks: Lane B's
+  client calls **only** the nine frozen paths, their `ReferralState` union equals the
+  server's state set, and their `REFER_GRADES` equals `dr.refer_grades` from
+  `config/thresholds.yaml`.
+- one place where the shape could NOT be matched exactly, and what was done instead:
+  `SiteStatusResponse.model_version` is a **non-nullable** string on Lane B's side, but a
+  site that has never passed an audit has no pinned version. Rather than make them
+  change the type, status returns the sentinel **`"unpinned"`**, which is the honest
+  reading of SPEC.md §6 ("a site must pass a local audit before its grades count"). If
+  Lane B would rather have `string | null`, that is a types.ts change and their call.
+- verified: **132 tests pass**, `ruff check` and `ruff format --check` clean on every
+  Lane A file. Denominators are asserted explicitly because they are the easy thing to
+  get quietly wrong: **gradability** is k = admitted / n = all images the gate saw (the
+  reject IS in the denominator); **abstention** is k = abstained / n = ADMITTED images
+  only (a rejected image was never graded, so it cannot have abstained — putting rejects
+  here would let a bad camera look like a confident model). `pooled` is **summed counts,
+  not a mean of rates**, and a test states why the two differ at unequal n. An empty site
+  still returns a row with n = 0 rather than vanishing. A test asserts **exactly the nine
+  frozen endpoints are registered** — no tenth.
+  Audit `passed` is COMPUTED, from one documented rule: `gradable_n >= min_n_for_rate AND
+  agreement_n >= min_n_for_rate AND not drift_flag`, with `min_n_for_rate` (30) read from
+  `config/thresholds.yaml`. A failed audit still gets ledgered but does NOT pin a model
+  version (asserted). A numerator above its denominator is a 422.
+  **Driven live through all nine endpoints on uvicorn :8078**, not only TestClient: three
+  encounters (grade 3 / abstain {0,3} / reject) → referral issued → transitioned
+  (`ledger_idx` 5, because the issue was 4) → `verify ok:true` → signed checkpoint at
+  idx 5 under `server-1` → status `unpinned` then `convnext_tiny@live` after the audit
+  passed → metrics with two site rows and a pooled line → queue depth `synced: 3` with
+  three typed attempts. Then the **T-17 tamper demo against the running server**:
+  `python -m netra.ledger.tamper --seq 3` and `GET /v1/ledger/verify` immediately
+  returned `{"ok":false,"first_bad_index":3}` with no restart — which is the sequence the
+  Ledger view needs.
+- unverified / TBD: **the audit pass rule contains no accuracy or agreement floor.** It
+  says "this site has enough cases to report a rate and no drift flagged", NOT "this site
+  is accurate". A real floor on gate-vs-human agreement is **TBD — verify** and needs a
+  clinical decision; none was invented. `_latest_audit` scans ledger entries newest-first
+  and parses JSON in Python — fine at demo scale, O(n) per request, and it will need an
+  index or a projection table if the ledger grows. `drift_flag` is whatever the auditor
+  submitted; nothing computes drift. Nothing authenticates an auditor. `grade_counts` is
+  stored in the ledger but no endpoint returns it — SPEC.md's status row does not name it.

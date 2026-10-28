@@ -25,7 +25,7 @@ B (Frontend), C (ML & Evaluation).
 | T-04 | `POST /v1/encounters` (append-before-return) + CORS + idempotency | A | done | T-03 |
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | done | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | done | T-03 |
-| T-07 | Site status, metrics, queue-depth endpoints | A | todo | T-02 |
+| T-07 | Site status, metrics, queue-depth endpoints | A | done | T-02 |
 | T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | todo | T-01 |
 | T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | todo | split frozen |
 | T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | todo | T-09 |
@@ -34,8 +34,8 @@ B (Frontend), C (ML & Evaluation).
 | T-13 | React PWA scaffold + shell: Vite/TS, Tailwind tokens, shadcn/ui, TanStack Query, vite-plugin-pwa, `<TopNav/>` + five routes, typed API client (mock responder) | B | done | Node (installed) |
 | T-14 | Capture route + Reject→recapture screen ("no result — take again") | B | done | T-13 |
 | T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |
-| T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | T-07 |
-| T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7 | B | todo | T-06 |
+| T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | — (T-07 done; API serves counts + Wilson) |
+| T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | todo | — (T-06 done) |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
 | T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); device-side queue outstanding | A | doing | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
