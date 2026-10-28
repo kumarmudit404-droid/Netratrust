@@ -775,3 +775,15 @@
   has not been seen. Advancing a referral needs the case still in memory — a page reload
   clears it and the view returns to its empty state, which is correct given there is no
   GET for a referral but will surprise anyone who reloads mid-demo.
+
+### 2026-10-28 — Lane B — Empty and error states (stretch item 7)
+- what changed: `src/routes/Sites.tsx` gained an explicit **zero-sites** state. Without
+  it a fresh server renders two empty plots plus a table whose only row is
+  "Pooled — no data", which reads as broken rather than as empty. It also says that no
+  endpoint creates a site, so registering one is a server-side step.
+- audited rather than assumed: Capture, Grade and Referrals already had `role="alert"`
+  error blocks with a `<StatusBadge status="error">`; Sites and Ledger have
+  loading/error/empty paths from their own tasks; `<TopNav/>` already treats an offline
+  queue as `pending-sync`, never as an error. No further gaps found, so nothing was
+  padded.
+- verified: `npm run build` and `npm test` green — 92 passed / 10 skipped.

@@ -61,6 +61,30 @@ export default function Sites() {
   }
 
   const rows = data.rows
+
+  // Zero sites is a real state on a fresh server, and without this the screen
+  // renders two empty plots plus a table whose only row is "Pooled — no data",
+  // which reads as broken rather than as empty.
+  if (rows.length === 0) {
+    return (
+      <Shell>
+        <Card className="mt-6 border-dashed">
+          <CardContent className="space-y-3 py-10">
+            <p className="text-subhead text-text">No sites registered yet.</p>
+            <p className="max-w-prose text-body text-text-muted">
+              Per-site performance appears here once a site exists and has
+              screened at least one patient.
+            </p>
+            <p className="max-w-prose text-caption text-text-muted">
+              There is no endpoint that creates a site — the nine are frozen —
+              so registering one is a server-side step.
+            </p>
+          </CardContent>
+        </Card>
+      </Shell>
+    )
+  }
+
   const gradability = toForestPoints(rows, "gradability")
   const abstention = toForestPoints(rows, "abstention")
   const pooled = pooledEstimate(data.pooled?.gradability)
