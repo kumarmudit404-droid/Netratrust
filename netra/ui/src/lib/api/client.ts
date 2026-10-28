@@ -28,9 +28,16 @@ import type {
 const BASE = import.meta.env.VITE_API_BASE ?? ""
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "0"
 
-/** Per-event idempotency key. SPEC.md: at-least-once delivery with server-side
+/** Per-ACTION idempotency key. SPEC.md: at-least-once delivery with server-side
  *  dedup — 409 if the key is still in flight, 422 if reused with a different
- *  payload. Never claim exactly-once. */
+ *  payload. Never claim exactly-once.
+ *
+ *  Every mutating call sends one. Without it the server cannot dedup, and a
+ *  retried delivery is applied twice: a repeated `contact_attempted` would
+ *  increment `attempt_n` again, which is a clinical record that reads as two
+ *  real contact attempts. A fresh UUID per call is correct — two deliberate
+ *  actions are two events; it is the REDELIVERY of one action that must be
+ *  collapsed. */
 function newIdempotencyKey(): string {
   return crypto.randomUUID()
 }
@@ -76,23 +83,31 @@ export const api = {
   },
 
   /** POST /v1/referrals -> {referral_id, state:"issued"} */
-  createReferral(encounterId: string): Promise<ReferralCreateResponse> {
+  createReferral(
+    encounterId: string,
+    idempotencyKey: string = newIdempotencyKey(),
+  ): Promise<ReferralCreateResponse> {
     if (USE_MOCK) return mock.createReferral()
-    return request<ReferralCreateResponse>("POST", "/v1/referrals", {
-      encounter_id: encounterId,
-    })
+    return request<ReferralCreateResponse>(
+      "POST",
+      "/v1/referrals",
+      { encounter_id: encounterId },
+      { "Idempotency-Key": idempotencyKey },
+    )
   },
 
   /** PATCH /v1/referrals/{id} -> {referral_id, state, ledger_idx} */
   patchReferral(
     id: string,
     body: ReferralPatchRequest,
+    idempotencyKey: string = newIdempotencyKey(),
   ): Promise<ReferralPatchResponse> {
     if (USE_MOCK) return mock.patchReferral(id, body)
     return request<ReferralPatchResponse>(
       "PATCH",
       `/v1/referrals/${encodeURIComponent(id)}`,
       body,
+      { "Idempotency-Key": idempotencyKey },
     )
   },
 
@@ -119,13 +134,19 @@ export const api = {
   },
 
   /** POST /v1/sites/{id}/audit -> {passed, pinned_model_version}
-   *  TODO(Lane A): request payload is TBD — see SiteAuditRequest in types.ts. */
-  siteAudit(siteId: string, payload: SiteAuditRequest): Promise<SiteAuditResponse> {
+   *  Also keyed: a redelivered audit would append a second audit entry to the
+   *  ledger and move `last_audit`, so it has the same hazard as a referral. */
+  siteAudit(
+    siteId: string,
+    payload: SiteAuditRequest,
+    idempotencyKey: string = newIdempotencyKey(),
+  ): Promise<SiteAuditResponse> {
     if (USE_MOCK) return mock.siteAudit()
     return request<SiteAuditResponse>(
       "POST",
       `/v1/sites/${encodeURIComponent(siteId)}/audit`,
       payload,
+      { "Idempotency-Key": idempotencyKey },
     )
   },
 

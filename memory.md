@@ -544,3 +544,33 @@
   index or a projection table if the ledger grows. `drift_flag` is whatever the auditor
   submitted; nothing computes drift. Nothing authenticates an auditor. `grade_counts` is
   stored in the ledger but no endpoint returns it — SPEC.md's status row does not name it.
+
+### 2026-10-28 — Lane B — Idempotency keys on every mutation, and the "unpinned" sentinel
+- what changed: `src/lib/api/client.ts` — `createReferral`, `patchReferral` and
+  `siteAudit` now send an `Idempotency-Key` header (a fresh `crypto.randomUUID()` per
+  call, overridable), matching what `createEncounter` already did. New
+  `src/lib/modelVersion.ts` renders Lane A's `"unpinned"` sentinel as the plain phrase
+  **"no audited model yet"**, with `isUnpinned()` so screens pick a muted treatment and
+  never the error treatment. New `src/lib/api/client.test.ts` (10 tests) and
+  `src/lib/modelVersion.test.ts` (7 tests). `vite.config.ts` gained `test.env =
+  { VITE_USE_MOCK: "0" }`.
+- `siteAudit` was keyed too, beyond the two asked for: a redelivered audit appends a
+  SECOND `site_audit` entry to the ledger and moves `last_audit`, which is the identical
+  hazard Lane A flagged for referrals. Flagged rather than done silently.
+- verified: `npm run build` and `npm test` green — **44 tests, 6 files** (28 before,
+  +16). The header assertions are real wire assertions: `fetch` is stubbed and the test
+  inspects the request the client actually builds, including method, URL and body. Two
+  deliberate `patchReferral` calls are asserted to get **different** keys — two contact
+  attempts ARE two events, and reusing a key would make the server replay the first
+  response and silently drop the second attempt. An explicit key is asserted to pass
+  through, so a genuine retry can reuse one. GET endpoints are asserted to send **no**
+  key and no body. A 422 is asserted to surface the server's `detail` string.
+- `vite.config.ts` needed `test.env = { VITE_USE_MOCK: "0" }` or the client's USE_MOCK
+  branch short-circuits every call and a header assertion **can never fail** — the test
+  would have passed while sending nothing. Found by writing the test and watching it
+  pass too easily.
+- unverified / TBD: the key is fresh per call, so a double-CLICK still produces two
+  events; nothing debounces the buttons. TanStack Query mutations default to `retry: 0`,
+  so no automatic retry re-runs `mutationFn` with a new key — if a retry policy is ever
+  added, the key must be hoisted out of the mutationFn or the protection is lost. No
+  screen renders `model_version` yet; the formatter lands with T-16.

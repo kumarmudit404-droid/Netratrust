@@ -37,7 +37,7 @@ B (Frontend), C (ML & Evaluation).
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | todo | — (T-07 done; API serves counts + Wilson) |
 | T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | todo | — (T-06 done) |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
-| T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); device-side queue outstanding | A | doing | T-04 |
+| T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); typed client now sends a key on all four mutations (Lane B); device-side queue outstanding | A | doing | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
 | T-21 | Deploy to Fly.io (volume for SQLite) | A | todo | T-18 |
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |

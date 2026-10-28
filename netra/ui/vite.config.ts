@@ -47,6 +47,10 @@ export default defineConfig({
     // logic and import-time tests only.
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Tests exercise the REAL client path with `fetch` stubbed, not the mock
+    // responder. Without this the client's USE_MOCK branch short-circuits
+    // every call and a header assertion can never fail.
+    env: { VITE_USE_MOCK: "0" },
   },
   server: {
     port: 5173,
