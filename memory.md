@@ -419,3 +419,39 @@
   has one writer, and the 409 path is exercised by inserting the in-flight row directly
   rather than by two simultaneous requests. `GET /v1/queue/depth` is not built yet, so
   `idempotency.depth()` is written but unexercised.
+
+### 2026-10-28 — Lane A — T-05 referrals and the state machine
+- what changed: `netra/api/referral_state.py` (the machine as a TABLE, not branching),
+  `netra/api/routes/referrals.py`, `tests/test_referrals.py` (25 tests).
+- verified: **85 tests pass.** The machine is driven from BOTH sides. Legal: the full
+  `issued → contact_attempted → contacted → appointment_offered → examined` path walks;
+  `contact_attempted` repeats and `attempt_n` counts 1, 2, 3 from the stored events
+  rather than from a client-supplied number; `abandoned` is reachable from all four
+  non-terminal states, each verified by replaying the prelude. Illegal: skipping a step
+  is **409** ("cannot go from 'issued' to 'examined'"), a terminal state accepts nothing
+  further (**409**, both `examined` and `abandoned`), `contact_attempted` without a
+  channel and `abandoned` without a reason are **422**, an unknown state is refused by
+  the frozen `Literal` before the handler sees it, and an unknown referral is 404.
+  **Every transition appends a ledger entry** — asserted by reading the payloads back
+  and checking the `from_state`/`to_state` sequence, with distinct increasing
+  `ledger_idx` values, and `verify` still `ok:true`. A REFUSED transition changes
+  nothing: state unchanged, no new ledger entry, still one referral event.
+  Clinical gates on issuing: **no referral from an abstention** (422; SPEC.md §7 says a
+  clinician decides), none from a rejected image, none for grade 1 (`refer_grades` is
+  [2,3,4] read from `config/thresholds.yaml`), 404 for an unknown encounter, 409 for a
+  second referral on one encounter, and a failed issue writes neither a referral nor a
+  ledger entry. `ruff` clean.
+- decisions: **409 vs 422 split.** A structurally impossible move is 409 (the resource
+  is not in a state where it makes sense); a permitted move with missing data is 422
+  (the request is wrong). SPEC.md fixes neither, so this is a choice — it is consistent
+  with the idempotency statuses SPEC.md *does* fix, and `referral_state.check` raises two
+  different exception classes so the mapping lives in one place.
+  The transition table is **data**, so a new state cannot be slipped in by an `if` in a
+  handler; a test asserts the state set is exactly the six frozen names.
+- unverified / TBD: `PATCH` honours `Idempotency-Key` (a retry replays, asserted) but
+  Lane B's client does NOT send one for `patchReferral` or `createReferral` — only for
+  `createEncounter`. So a retried transition from the UI will be applied twice if it is
+  a repeatable one (`contact_attempted` would increment `attempt_n` again). Worth a Lane
+  B line, but it needs no contract change: the header is already accepted.
+  Nothing enforces WHO may advance a referral — there is no auth, so any caller can
+  move any referral to `examined`.
