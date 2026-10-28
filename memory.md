@@ -958,3 +958,40 @@ deployed, nothing pushed.
   Silently overriding that crosses a lane boundary and contradicts a recorded decision,
   so it is reverted to its committed state. Lane C's ruff invocations are now scoped to
   the files this lane owns, not to `scripts/` wholesale.
+
+### 2026-10-28 — Lane C — T-12 unit tests for every metrics.py function
+- what changed: `tests/test_metrics.py` rewritten from 2 tests to **38**, covering
+  `brier`, `nll`, `calibration_slope_intercept`, `ece`, `fit_temperature`,
+  `risk_coverage`, `augrc`, `coverage_at_risk`, `wilson_interval` and
+  `abstention_report`. `metrics.py` itself was **not touched** — altering a metric's
+  definition is the evaluation-drift failure rules.md §6 makes a stop-and-ask, and
+  nothing here needed it.
+- the metrics were CHARACTERISED before being asserted, so the expected values are
+  measured rather than assumed. Results, all in the textbook direction:
+  `calibration_slope_intercept` on calibrated data gives slope **0.971**, intercept
+  **0.014**; sharpening the logits ×2 drops the slope to **0.485** (CLAUDE.md:
+  slope < 1 means over-confident, the usual direction for a neural network) and
+  flattening ×0.5 raises it to **1.940**. `fit_temperature` returns **1.053** on
+  already-calibrated logits and recovers **3.159** from 3× logits and **0.351** from
+  ⅓× — it inverts the scale it was given. So the hand-rolled intercept is sound and
+  there was nothing to flag.
+- values asserted exactly, each hand-computed first and then confirmed against the
+  implementation: `risk_coverage` on four cases gives coverage `[.25,.5,.75,1]` and risk
+  `[0,0,⅓,.5]`; `augrc` = **0.125** on that curve; `coverage_at_risk` at target 0.3 is
+  **0.5**; `wilson_interval(24,30)` = **[0.6269395261897256, 0.9049502189759876]** —
+  which is byte-for-byte the pair Lane B's `formatRate` test renders as
+  "24/30 (0.63-0.90)", so the two lanes are now pinned to the same arithmetic from
+  opposite ends.
+- the tests assert PROPERTIES where an exact value would be dataset-specific:
+  `metrics.py` documents a 7.6% ECE swing from the bin count alone, measured on another
+  corpus, so the test asserts only that 15 and 50 bins disagree. `fit_temperature`'s
+  documented signature — "ECE falls substantially while Brier barely moves" — is
+  asserted directly: ECE at least halves and Brier shifts under 0.10.
+- edge cases that would otherwise return something misleading: `wilson_interval(0,0)`
+  is `(0,1)` (claims nothing rather than dividing by zero); `abstention_report` with
+  nothing admitted returns **NaN** accuracy, not 0.0, because 0.0 reads as "it got
+  everything wrong"; `coverage_at_risk` returns 0.0 for an unreachable target, i.e.
+  refusing every case, which is the honest answer; `calibration_slope_intercept`
+  survives p exactly 0 and 1 (logit(0) is -inf and the eps clip is what saves it);
+  coverage + abstention_rate is asserted to sum to 1 across every admit count.
+- verified: **178 tests pass** (142 before, +36), ruff clean on this lane's files.
