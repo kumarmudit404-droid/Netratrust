@@ -26,8 +26,8 @@ B (Frontend), C (ML & Evaluation).
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | done | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | done | T-03 |
 | T-07 | Site status, metrics, queue-depth endpoints | A | done | T-02 |
-| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | blocked | EyeQ unobtainable (labels reference EyePACS ~89GiB). Code + synthetic-head stand-in done; needs a quality-labelled corpus |
-| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | doing | splits frozen; code + `notebooks/train_dr.ipynb` ready, CPU-smoked. **Needs the GPU run** |
+| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | doing | UNBLOCKED: EyeQ publishes labels, not pixels, and EyePACS is MOUNTED on Kaggle. `netra/models/eyeq.py` + section 7 of `notebooks/train_kaggle.ipynb` fit the real head. **Needs the GPU run** |
+| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | doing | `notebooks/train_kaggle.ipynb` + `kaggle_payload.zip` ready and driven end to end against a simulated mount. **Needs the GPU run** |
 | T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | done | tested on synthetic probabilities; conformalise on real ones after T-09 |
 | T-11 | Fit thresholds on **calibration split only**; write `thresholds.yaml` | C | doing | fitter built + run; it REFUSED to write (one-sided scores). Placeholders stand — see memory.md |
 | T-12 | Unit-test remaining metrics functions | C | done | T-01 |
@@ -43,6 +43,15 @@ B (Frontend), C (ML & Evaluation).
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |
 | T-23 | Rehearse 3-min demo on deployed URL; recorded fallback | all | todo | T-21 |
 | T-24 | **Hard stop** (Fri 12:00) | all | todo | — |
+
+## Lane C — what the one Kaggle run has to do (T-08 + T-09)
+`python scripts/package_for_kaggle.py` → upload `kaggle_payload.zip` as a Kaggle
+Dataset → attach it with an APTOS dataset and an EyePACS mirror → T4 + Internet on →
+Run All on `notebooks/train_kaggle.ipynb`. Its first cell is the run book. One session
+produces **both** `convnext_tiny_aptos.pt` (`trained: true`) and
+`quality_head_eyeq.pkl` (real human EyeQ labels, superseding the synthetic head), plus
+the grown splits to commit. Re-run `package_for_kaggle.py` and upload a new dataset
+version after any code change — the notebook stops at cell 1 on a stale payload.
 
 ## Critical path
 `T-01 → T-02 → T-03 → T-04 → T-18 → T-21 → T-23`. The two real risks sit off this path:

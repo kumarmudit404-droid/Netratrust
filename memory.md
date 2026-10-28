@@ -1310,3 +1310,86 @@ claiming a pytest count that had not been observed, because lint/test/commit wer
 into one shell line and the `&&` guard did not hold as read. Every later commit ran its
 gates as separate commands. A commit message is a claim; an unverified claim in history
 is worse than a visible red commit.
+
+### 2026-10-28 — Lane C — one Kaggle run, both real artifacts (T-08 + T-09)
+Goal: make a single T4 session produce the DR checkpoint **and** the real QuickQual
+head, and package everything Kaggle needs. **402 tests pass** (303 at the start of this
+session, +99). Lane C touched only `netra/models`, `netra/eval`, `notebooks`, `scripts`,
+`tests/*` for its own modules, plus `tracker.md`/`memory.md` and one `.gitignore` line
+for its own build artifact. `netra/api`, `netra/ui`, `netra/db`, `netra/ledger`
+unmodified — `scripts/gen_device_key.py` was touched once by a blanket `ruff --fix` and
+reverted immediately, the same slip `0b31a4f` recorded.
+
+**Team decision taken before any code: the corpus grows.** The committed splits covered
+366 images (the 366 rows of one mirror's `test.csv` — all a CPU box could fetch per
+file). 219 training images cannot reach the QWK 0.88–0.92 SPEC.md §2 expects, and the
+full 3,662 are mounted on Kaggle. `rules.md` §6 makes a split change a stop-and-ask, so
+it was asked. Answer: extend at the same seed.
+
+**Why growing is not the re-shuffling `.claude/rules/ml.md` forbids, and how that is
+proven rather than claimed.** `assign_fold` is a pure function of `(seed, patient_id)`,
+so an image's fold does not depend on what else is in the manifest. Verified before
+writing anything: the pure function reproduces **all 366** committed assignments, and
+`tests/test_split_growth.py` pins that using the committed splits alone (no manifest —
+it is gitignored, and APTOS has no patient id so `patient_id == image_id`). The refactor
+that moved the arithmetic into `netra/models/splits.py` reproduces `data/manifest.csv`
+and all three split files **byte-identically**. `check_preserved()` raises `SplitDrift`
+on a moved, dropped or re-seeded image; `check_labels_agree()` raises on a relabelled
+one — a relabelled image changes what the old calibration fold MEANS without changing
+which images are in it, which nothing downstream would notice.
+
+**T-08 was unblocked by reading the blocker correctly.** EyeQ publishes 28,792 human
+gradability judgements and no pixels; the 89 GiB was always EyePACS, which is MOUNTED on
+Kaggle. So the labels are two 700 KiB CSVs over HTTP and nothing else is downloaded.
+Verified against the real files: `,image,quality,DR_grade`; quality 0=Good 1=Usable
+2=Reject; train 12,543 rows / 8,614 patients, test 16,249 / 12,048, and the two are
+**patient-disjoint (0 overlap)** — so the published split is used rather than one we
+invent. Head is binary Good+Usable vs Reject, which is the decision the gate makes and
+the setting QuickQual's published 0.886/0.9687/0.811 refers to. Patient identity is REAL
+here (`<patient>_<left|right>`), unlike APTOS.
+
+**Five bugs found by building, not by reading:**
+1. `notebooks/train_dr.ipynb` pointed `IMAGES_DIR` at `train_images/train_images` while
+   the committed splits came from a mirror storing files under `test_images/test_images`
+   → `retained_fraction: 0.0` and an assertion ~40 min into a session. That notebook is
+   now a pointer to `train_kaggle.ipynb`.
+2. `train()` ignored `splits_dir`/`manifest` entirely — a grown run would have trained on
+   the grown splits it thought it chose and the 366-image manifest it actually read, with
+   every extra id counted as a missing manifest row. Now parameters, with a test.
+3. `collect()` looked only for `<id>.png`; several APTOS mirrors ship `.jpg`.
+4. `find_aptos_label_csvs` lived in `scripts/`, which is NOT in the payload — the
+   notebook could not have imported it. Moved into `netra/models/splits.py`.
+5. The payload zip on disk went stale mid-session and surfaced as an `AttributeError`
+   three cells into the dry run. A Kaggle Dataset is versioned by hand, so cell 1 now
+   checks the payload exposes what the notebook imports and says to rebuild.
+
+**What was actually run, and what was not.** The notebook was driven **end to end**
+against a simulated `/kaggle/input` — a freshly built payload zip, the real 366 APTOS
+labels, the real EyeQ CSVs over the network, synthetic pixels, only the training call
+stubbed by a real `trained: true` checkpoint. Every cell ran; both artifacts landed. No
+GPU here, so **no number in this lane is still a result**: no DR QWK, no gate accuracy,
+no abstention rate on real data. The 0.6667 gate accuracy the dry run printed is on
+random-init densenet features over synthetic pixels and means nothing.
+
+**Design choices worth keeping:**
+- Nothing is hardcoded to a Kaggle mount. APTOS labels are found by their
+  `id_code,diagnosis` **header** (a filename match picks up `sample_submission.csv`),
+  the APTOS image directory by asking which one holds the ids in the frozen splits, and
+  EyePACS by the `<patient>_<left|right>` filename shape. Candidates are printed.
+- All eleven stop conditions raise a named `Stop`, not a warning. A warning that prints
+  and continues is not a stop.
+- `scripts/package_for_kaggle.py` parses every `netra.*` import out of the payload with
+  `ast` and refuses to write if one does not resolve inside it — that failure otherwise
+  costs 40 minutes of a 9-hour session. It also refuses to ship `keys/` or another
+  lane's code. The zip is byte-for-byte reproducible, so its sha256 identifies the code
+  a run used. The test that matters unpacks the real zip and imports five modules in a
+  **subprocess with the repo off `sys.path`**; without that isolation it passes for a
+  payload that is missing the module.
+- `QuickQualFeatures.batch` gained a `batch_size` defaulting to 1 (no existing caller
+  changes), and a test proves batching does not move the numbers — if it did, a head
+  fitted in a batched run would not match the gate that serves single images.
+
+**Still open after the GPU run:** commit `artifacts/splits_full/` and
+`manifest_full.csv`; re-run `fit_thresholds` with both real artifacts in place (the
+quality cut-points should now be fittable against real EyeQ labels rather than refused);
+then the **test** split, once, and only then.
