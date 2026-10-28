@@ -787,3 +787,66 @@
   queue as `pending-sync`, never as an error. No further gaps found, so nothing was
   padded.
 - verified: `npm run build` and `npm test` green — 92 passed / 10 skipped.
+
+### 2026-10-28 — Lane B — Unattended run summary
+Backlog worked top to bottom. Both gates (`npm run build`, `npm test`) green at every
+commit except one, which is recorded and fixed below.
+
+**Commits, in order (all Lane B, `netra/ui` only, no attribution footer):**
+1. `98b0c14` — Idempotency-Key on every mutation; the "unpinned" sentinel rendered plainly.
+2. `d3313e8` — default to the real API; the mock responder becomes opt-in.
+3. `bd6f2e1` — **T-16** Sites view, per-site Wilson forest plot.
+4. `7b8d595` — **T-17** Ledger view: verify, checkpoint, tamper demo.
+5. `4594b34` — live integration tests for the typed client against the real API.
+   **This one was committed RED** (see 8443b4f).
+6. `8443b4f` — fix the build that 4594b34 broke.
+7. `88180f8` — Referrals view driven by the frozen state machine (stretch 6).
+8. `0f4ccd9` — explicit zero-sites state (stretch 7).
+
+**Tests:** 28 → **92 passing, 10 skipped** across 11 files. The 10 skipped are the live
+suite, which needs `VITE_NETRA_LIVE=1` and a running API.
+
+**The one red commit, stated plainly:** `4594b34` passed `npm test` but failed
+`npm run build` — `live.test.ts` used `process.env` and `tsconfig.app.json` declares
+only `vite/client` types, so `tsc -b` raised TS2591 twice. I had not run the build
+before committing. Fixed one commit later in `8443b4f` by reading
+`import.meta.env.VITE_NETRA_LIVE`. The lesson is general: `tsc -b` type-checks tests, so
+a test-only file can break the build, and `npm test` green says nothing about it.
+
+**`TODO(review)` markers left in the code (2):**
+- `src/lib/forest.ts` — a plotted marker is a visual proportion even at n<30. design.md
+  §7 forbids a bare PERCENTAGE; a point with its wide Wilson interval is the honest
+  alternative, so small-n sites are plotted, flagged and labelled "k of n". One line in
+  `toForestPoints` suppresses them entirely if the team prefers that.
+- `src/lib/referralMachine.ts` — it mirrors `netra/api/referral_state.py`. The server is
+  authoritative; the client copy only avoids offering buttons guaranteed to 409. If they
+  disagree, the server wins and the client is the bug.
+
+**Skipped, with reasons:**
+- **Backlog item 4, the browser pass — BLOCKED, not done.** The Claude-in-Chrome
+  extension is not connected (`list_connected_browsers` → `[]`), so nothing was
+  rendered, screenshotted, tab-walked or contrast-measured in situ, at either 1280 or
+  375. **No screenshots exist.** Substituted with: SSR of `ForestPlot`/`ForestTooltip`
+  via `react-dom/server` (already a dependency — no DOM library added), and a built-CSS
+  check that every token class used actually emits a rule, since Tailwind drops unknown
+  classes silently. That combination catches crashes and missing styles; it cannot catch
+  layout, overflow, focus order or contrast. **A human browser pass is still owed on
+  Sites, Ledger and Referrals.**
+- **Backlog item 5's screenshot** — same cause. The rest of item 5 was done more
+  thoroughly than asked: see the real-API entry above, 10/10 live tests cross-origin,
+  plus the tamper transition observed through the client as
+  `{"ok":false,"first_bad_index":2}`.
+- **Stretch item 8** — already satisfied by work done in items 2 and 3 rather than
+  skipped: `forest.test.ts` (12 cases) covers Sites rate formatting including the n<30
+  boundary and the pooled-is-not-a-mean property; `ledgerState.test.ts` (16) and
+  `ForestPlot.ssr.test.ts` (8) cover Ledger state rendering and figures-to-text. No
+  filler tests were added on top.
+
+**Final `VITE_USE_MOCK` state:** the committed default in `src/lib/api/client.ts` is
+**the real API** — the mock is opt-in via `VITE_USE_MOCK=1`. The local, gitignored
+`netra/ui/.env` is set to **`VITE_USE_MOCK=0`** with `VITE_API_BASE=` empty, i.e. the
+real API through the Vite dev proxy, matching the committed default. Anyone running
+`npm run dev` needs uvicorn on :8000, or must set `VITE_USE_MOCK=1`.
+
+**Servers:** both stopped (uvicorn :8000 and Vite :5173; no listeners remain). Nothing
+deployed, nothing pushed.
