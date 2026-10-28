@@ -289,3 +289,42 @@
   timm) and is NOT pinned in `requirements.txt`, so Lane A does not import it — see the
   T-02 entry for the stdlib threshold reader written instead. No GPU was present; torch
   was not exercised beyond import resolution, which is Lane C's concern.
+
+### 2026-10-28 — Lane A — T-02 database tables and append-only triggers
+- what changed: `netra/db/models.py` (the seven tables of architecture.md §3 plus a
+  documented eighth), `netra/db/engine.py` (engine, `init_db`, trigger install/drop,
+  `session_scope`), `netra/db/util.py` (`now_iso`, `new_id` — both STRINGS),
+  `tests/conftest.py`, `tests/test_db.py` (14 tests).
+- what changed (deliberate deviations, both flagged rather than silent):
+  1. **An eighth table, `idempotency_keys`** (`key, endpoint, request_fingerprint,
+     status[in_flight|done], response_json, created_at`). architecture.md §3 says
+     "Seven tables"; SPEC.md §5 requires server-side idempotent dedup and names no
+     table. It stores no clinical fact and adds no endpoint, so the frozen contract is
+     untouched. `architecture.md` still reads "Seven tables" and was NOT edited —
+     that is a doc change to agree, not a Lane A edit.
+  2. **The ledger row carries BOTH doc spellings.** SPEC.md §4 lists `idx, prev_hash,
+     payload_hash, payload_json, signer_kid, signature`; architecture.md §3 lists
+     `seq, entry_hash, prev_hash, payload, signer_kid, signature, created_at`. The
+     table has `seq` (== SPEC's `idx`, and the source of the API's `ledger_idx`/`idx`),
+     `prev_hash`, `payload_hash`, `entry_hash`, `payload_json`, `signer_kid`,
+     `signature`, `created_at` — every field either doc names, because verification
+     needs the payload hash and the chained hash separately.
+- verified: **14 tests pass.** The four ledger-bearing tables (`encounters`,
+  `referral_events`, `ledger`, `checkpoints`) each refuse UPDATE and DELETE — asserted
+  per table, parametrised, with the trigger's own message matched. `RAISE(ABORT, …)`
+  surfaces as **`sqlalchemy.exc.IntegrityError`, not `OperationalError`** (the first
+  draft asserted the wrong class and failed). `referrals` is asserted MUTABLE on
+  purpose: `state` must advance, and its history lives in the append-only
+  `referral_events`. Foreign keys are enforced — SQLite has them OFF by default, so
+  `make_engine` issues `PRAGMA foreign_keys = ON`; a bad `site_id` now raises. SQLAlchemy
+  does NOT order a site INSERT before a device INSERT (no `relationship()` between
+  them), so the fixture flushes between the two — found by a real FK failure, not
+  predicted. `init_db` is idempotent. `ruff check` and `ruff format --check` clean on
+  every file in this step.
+- unverified / TBD: the triggers stop the APPLICATION from rewriting history; they do
+  not stop anyone with direct database access, who can `DROP TRIGGER`. That is the
+  honest threat model and the reason the hash chain and signatures exist — see T-03.
+  No migration tooling: schema changes are `create_all` on a fresh file. Concurrency is
+  untested beyond SQLite's single-writer default; `aiosqlite` stays banned.
+  The repo's **pre-existing** `scripts/` files already fail `ruff check` (3 findings,
+  import sorting) — not touched, not this lane's call to fix.
