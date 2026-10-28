@@ -232,6 +232,70 @@ def write_manifest(rows: Sequence[Mapping[str, str]], path: pathlib.Path) -> str
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+#: A label file we can read has these two columns in its header.
+APTOS_COLUMNS = frozenset({"id_code", "diagnosis"})
+#: Directory names never worth walking on a Kaggle mount.
+SKIP_DIRS = frozenset({".git", "__pycache__", "node_modules", ".ipynb_checkpoints"})
+
+
+def find_aptos_label_csvs(root: pathlib.Path, max_depth: int = 4) -> list[pathlib.Path]:
+    """Every CSV under `root` whose header is APTOS's `id_code,diagnosis`.
+
+    Found by reading the header, not by guessing at filenames: the mirrors
+    disagree about whether the full labels live in `train.csv`, `train_1.csv`
+    or `labels.csv`, and a filename match would pick up `sample_submission.csv`,
+    whose second column is a prediction rather than a diagnosis.
+    """
+    root = pathlib.Path(root)
+    found: list[pathlib.Path] = []
+    if not root.exists():
+        return found
+    root_depth = len(root.parts)
+    for path in sorted(root.rglob("*.csv")):
+        if any(part in SKIP_DIRS for part in path.parts):
+            continue
+        if len(path.parts) - root_depth > max_depth:
+            continue
+        try:
+            with path.open(newline="", encoding="utf-8") as fh:
+                header = next(csv.reader(fh), [])
+        except (OSError, UnicodeDecodeError):
+            continue
+        if APTOS_COLUMNS <= {h.strip() for h in header}:
+            found.append(path)
+    return found
+
+
+def check_labels_agree(
+    old_rows: Sequence[Mapping[str, str]], new_rows: Sequence[Mapping[str, str]]
+) -> dict:
+    """The new manifest must be a SUPERSET of the old one, with equal labels.
+
+    A relabelled image is not growth. It changes what the old calibration fold
+    MEANS without changing which images are in it, which is exactly the kind
+    of drift nothing downstream would notice.
+    """
+    new_by_id = {r["image_id"]: r for r in new_rows}
+    missing = [r["image_id"] for r in old_rows if r["image_id"] not in new_by_id]
+    relabelled = [
+        (r["image_id"], r["label"], new_by_id[r["image_id"]]["label"])
+        for r in old_rows
+        if r["image_id"] in new_by_id
+        and new_by_id[r["image_id"]]["label"] != r["label"]
+    ]
+    if missing:
+        raise ValueError(
+            f"the new label files are missing {len(missing)} image(s) the old "
+            f"manifest has, so this is not a superset: {missing[:5]}"
+        )
+    if relabelled:
+        raise ValueError(
+            f"{len(relabelled)} image(s) changed label between the old manifest "
+            f"and the new label files: {relabelled[:5]}"
+        )
+    return {"n_old_rows": len(old_rows), "missing": 0, "relabelled": 0}
+
+
 def read_manifest_rows(path: pathlib.Path) -> list[dict[str, str]]:
     with pathlib.Path(path).open(newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))

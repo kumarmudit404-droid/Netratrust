@@ -92,15 +92,28 @@ def train(
     out: pathlib.Path | None = None,
     pretrained: bool = True,
     limit: int | None = None,
+    splits_dir: pathlib.Path | None = None,
+    manifest: pathlib.Path | None = None,
 ) -> dict:
-    """Run training. In smoke mode this does 2 steps and stops."""
+    """Run training. In smoke mode this does 2 steps and stops.
+
+    `splits_dir` and `manifest` default to the committed ones. The Kaggle run
+    passes the grown pair written by `netra.models.splits` - still the same
+    seed and the same folds for every image that already had one, just more
+    of them. Without these arguments that run would train on the grown splits
+    it thinks it chose and the 366-image manifest it actually read.
+    """
     import torch
     from torch import nn
 
     set_seed()
 
-    train_examples, train_report = collect("train", images_dir, limit=limit)
-    calib_examples, calib_report = collect("calib", images_dir, limit=limit)
+    train_examples, train_report = collect(
+        "train", images_dir, splits_dir=splits_dir, manifest=manifest, limit=limit
+    )
+    calib_examples, calib_report = collect(
+        "calib", images_dir, splits_dir=splits_dir, manifest=manifest, limit=limit
+    )
     # Retained fractions, out loud, before anything is trained.
     print(json.dumps({"train": train_report, "calib": calib_report}, indent=2))
     if not train_examples:
@@ -211,6 +224,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument(
+        "--splits-dir",
+        type=pathlib.Path,
+        default=None,
+        help="frozen splits to read; defaults to the committed data/splits",
+    )
+    ap.add_argument(
+        "--manifest",
+        type=pathlib.Path,
+        default=None,
+        help="manifest to read labels from; defaults to data/manifest.csv",
+    )
+    ap.add_argument(
         "--smoke",
         action="store_true",
         help="two steps on a handful of images, to prove the loop runs",
@@ -232,6 +257,8 @@ def main(argv: list[str] | None = None) -> int:
         out=args.out,
         pretrained=not args.random_init,
         limit=args.limit,
+        splits_dir=args.splits_dir,
+        manifest=args.manifest,
     )
     print(json.dumps({k: v for k, v in result.items() if k != "history"}, indent=2))
     if args.smoke:

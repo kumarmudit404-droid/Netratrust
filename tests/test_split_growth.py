@@ -300,3 +300,63 @@ def test_find_aptos_label_csvs_matches_on_the_header_not_the_name(tmp_path):
 def test_find_aptos_label_csvs_on_a_missing_root_is_empty_not_an_error(tmp_path):
     """On a box with no /kaggle/input this must return [], not explode."""
     assert load_extend_module().find_aptos_label_csvs(tmp_path / "nope") == []
+
+
+# ------------------------------- the helpers the Kaggle notebook imports
+
+
+def test_check_labels_agree_accepts_a_superset():
+    old = rows_for([("a", "0"), ("b", "2")])
+    new = rows_for([("a", "0"), ("b", "2"), ("c", "1")])
+    assert S.check_labels_agree(old, new) == {
+        "n_old_rows": 2,
+        "missing": 0,
+        "relabelled": 0,
+    }
+
+
+def test_check_labels_agree_refuses_a_relabelled_image():
+    """Growth may add rows. It may not change what an existing row means."""
+    old = rows_for([("a", "0")])
+    new = rows_for([("a", "4")])
+    with pytest.raises(ValueError, match="changed label"):
+        S.check_labels_agree(old, new)
+
+
+def test_check_labels_agree_refuses_a_shrink():
+    old = rows_for([("a", "0"), ("b", "0")])
+    new = rows_for([("a", "0")])
+    with pytest.raises(ValueError, match="not a superset"):
+        S.check_labels_agree(old, new)
+
+
+def test_splits_exposes_the_label_file_finder_so_the_payload_carries_it():
+    """The notebook imports this; `scripts/` is not in the Kaggle payload."""
+    assert callable(S.find_aptos_label_csvs)
+
+
+def test_train_reads_the_splits_and_manifest_it_is_given(tmp_path, monkeypatch):
+    """Without this the grown run would read the 366-image manifest instead."""
+    from netra.models import train as T
+
+    ids = ["img0", "img1", "img2"]
+    splits_dir = tmp_path / "grown"
+    splits_dir.mkdir()
+    for name, members in (("train", ids[:2]), ("calib", ids[2:]), ("test", [])):
+        (splits_dir / f"{name}.json").write_text(json.dumps(members))
+    manifest = tmp_path / "grown.csv"
+    S.write_manifest(rows_for([(i, "0") for i in ids]), manifest)
+
+    seen = {}
+
+    def fake_collect(name, images_dir, **kwargs):
+        seen[name] = kwargs
+        return [], {"split": name, "retained_fraction": 0.0, "n_present": 0}
+
+    monkeypatch.setattr(T, "collect", fake_collect)
+    with pytest.raises(SystemExit, match="no training images"):
+        T.train(images_dir=tmp_path / "imgs", splits_dir=splits_dir, manifest=manifest)
+
+    assert seen["train"]["splits_dir"] == splits_dir
+    assert seen["train"]["manifest"] == manifest
+    assert seen["calib"]["splits_dir"] == splits_dir

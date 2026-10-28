@@ -32,7 +32,6 @@ What this script will NOT do:
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import pathlib
 import sys
@@ -45,7 +44,9 @@ from netra.models.splits import (
     SEED,
     SplitDrift,
     assign_many,
+    check_labels_agree,
     check_preserved,
+    find_aptos_label_csvs,
     merge_manifest_rows,
     read_aptos_labels,
     read_manifest_rows,
@@ -53,69 +54,6 @@ from netra.models.splits import (
     write_manifest,
     write_splits,
 )
-
-#: A label file we can read has exactly these two columns in its header.
-APTOS_COLUMNS = {"id_code", "diagnosis"}
-#: Directory names that are never worth walking on Kaggle.
-SKIP_DIRS = {".git", "__pycache__", "node_modules", ".ipynb_checkpoints"}
-
-
-def find_aptos_label_csvs(root: pathlib.Path, max_depth: int = 4) -> list[pathlib.Path]:
-    """Every CSV under `root` whose header is APTOS's `id_code,diagnosis`.
-
-    Found by reading the header, not by guessing at filenames: the mirrors
-    disagree about whether the full labels live in `train.csv`, `train_1.csv`
-    or `labels.csv`, and a filename match would pick up a submission template.
-    """
-    root = pathlib.Path(root)
-    found: list[pathlib.Path] = []
-    if not root.exists():
-        return found
-    root_depth = len(root.parts)
-    for path in sorted(root.rglob("*.csv")):
-        if any(part in SKIP_DIRS for part in path.parts):
-            continue
-        if len(path.parts) - root_depth > max_depth:
-            continue
-        try:
-            with path.open(newline="", encoding="utf-8") as fh:
-                header = next(csv.reader(fh), [])
-        except (OSError, UnicodeDecodeError):
-            continue
-        if APTOS_COLUMNS <= {h.strip() for h in header}:
-            found.append(path)
-    return found
-
-
-def check_old_manifest_agrees(
-    old_manifest: pathlib.Path, rows: list[dict[str, str]]
-) -> dict:
-    """The new manifest must be a SUPERSET of the old one, with equal labels.
-
-    A relabelled image is not growth. It changes what the old calibration fold
-    meant without changing which images are in it, which is exactly the kind of
-    drift nothing downstream would notice.
-    """
-    old_rows = read_manifest_rows(old_manifest)
-    new_by_id = {r["image_id"]: r for r in rows}
-    missing = [r["image_id"] for r in old_rows if r["image_id"] not in new_by_id]
-    relabelled = [
-        (r["image_id"], r["label"], new_by_id[r["image_id"]]["label"])
-        for r in old_rows
-        if r["image_id"] in new_by_id
-        and new_by_id[r["image_id"]]["label"] != r["label"]
-    ]
-    if missing:
-        raise SystemExit(
-            f"the new label files are missing {len(missing)} image(s) that the "
-            f"old manifest has, so this is not a superset: {missing[:5]}"
-        )
-    if relabelled:
-        raise SystemExit(
-            f"{len(relabelled)} image(s) changed label between the old manifest "
-            f"and the new label files: {relabelled[:5]}"
-        )
-    return {"n_old_rows": len(old_rows), "missing": 0, "relabelled": 0}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -177,7 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         candidate = pathlib.Path("data/manifest.csv")
         old_manifest = candidate if candidate.exists() else None
     if old_manifest is not None:
-        print(json.dumps(check_old_manifest_agrees(old_manifest, rows), indent=2))
+        try:
+            agreement = check_labels_agree(read_manifest_rows(old_manifest), rows)
+        except ValueError as exc:
+            print(f"\nREFUSING TO WRITE: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(agreement, indent=2))
     else:
         print(
             "no old manifest to compare against (data/manifest.csv is gitignored); "
