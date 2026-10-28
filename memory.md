@@ -328,3 +328,46 @@
   untested beyond SQLite's single-writer default; `aiosqlite` stays banned.
   The repo's **pre-existing** `scripts/` files already fail `ruff check` (3 findings,
   import sorting) — not touched, not this lane's call to fix.
+
+### 2026-10-28 — Lane A — T-03 ledger: hash chain, Ed25519, rfc8785 on write and verify
+- what changed: `netra/ledger/canonical.py` (rfc8785 + the float/2^53 guards),
+  `keys.py` (Ed25519 keystore, `signer_kid` from day one), `chain.py` (`append`),
+  `verify.py` (runnable: `python -m netra.ledger.verify`), `tamper.py` (runnable:
+  `python -m netra.ledger.tamper --seq N`), `tests/test_ledger.py` (20 tests).
+- shape implemented, exactly as SPEC.md §4 states it: `payload_hash =
+  SHA-256(rfc8785(payload))`, `entry_hash = SHA-256(prev_hash ‖ payload_hash)` over the
+  RAW 64 bytes (not the hex text), Ed25519 over the 32-byte `entry_hash`. **Note the
+  two-step chain:** the brief's shorthand read `SHA-256(prev_hash ‖ rfc8785(payload))`,
+  which hashes the payload bytes directly into the chain; SPEC.md chains over
+  `payload_hash` instead. SPEC.md wins (rules.md §0) and the test
+  `test_entry_hash_matches_the_spec_formula` pins the SPEC form.
+- verified: **20 tests pass.** `rfc8785.dumps({"n": 1.0})` was ASSERTED in a test to emit
+  `{"n":1}` against `json.dumps`'s `{"n": 1.0}` — the CLAUDE.md warning is now a failing
+  test if it ever stops being true. rfc8785 does NOT raise on a float, it silently
+  normalises, so `reject_floats` is the guard that actually stops them; it reports the
+  path (`payload.sets[1].p`) and lets `bool` through (a subclass of `int` that
+  canonicalises to `true`). `MAX_SAFE_INT` boundary tested both sides. Verify
+  **re-canonicalises** the stored payload rather than re-hashing the stored text, so
+  non-canonical bytes are caught too. Four independent checks per entry: seq contiguity,
+  `prev_hash` linkage, payload hash, signature. **The mandatory tamper test passes:**
+  three entries appended, the middle one corrupted in place, `verify` returns
+  `ok=False, first_bad_index=2` with `checked=1`. Three further tamper shapes are
+  pinned: a DELETED entry (caught as a seq gap, reported at index 3), a RE-SIGNED entry
+  where the attacker recomputed both hashes (caught because the signature is not the
+  registered device's), and an unknown `signer_kid` (reported as such rather than as a
+  signature mismatch — `known_public_hex` deliberately does not GENERATE a key for an
+  unseen kid). Driven end-to-end outside pytest on a scratch DB: append 3 → `verify`
+  prints `ok: 3 entries verified` exit 0 → `tamper --seq 2` → `verify` prints
+  `FAILED at index 2: payload_hash does not match the stored payload` exit 1. The tamper
+  demo **reinstalls the trigger it drops**, asserted by a test.
+- unverified / TBD: **the server signs on the device's behalf.** The private keys live in
+  `keys/` on the server, so a signature attests "this server recorded this entry under
+  this kid", NOT "this device authored it". True per-device signing needs the device to
+  send a signature, and the frozen request body has no field for one — raise it if the
+  end-to-end claim matters for the demo. Key ROTATION is unexercised: `signer_kid` is
+  stored and resolved per entry, so an old entry stays verifiable after a new key is
+  issued, but no rotation has been performed. `KeyStore` CREATES a key on first use so a
+  fresh box produces a verifiable chain; that also means a lost `keys/` directory makes
+  every existing entry unverifiable. The tamper demo is **not reachable from the API**
+  and never will be — the nine endpoints are frozen and a "corrupt the ledger" route in a
+  deployed build is a liability; T-17 drives it as a CLI beside the Ledger view.

@@ -21,7 +21,7 @@ B (Frontend), C (ML & Evaluation).
 |---|---|---|---|---|
 | T-01 | Build env: Python 3.12 venv, `pip install -r requirements.txt`, green `pytest` | A | done | — |
 | T-02 | DB tables + append-only triggers (SQLModel) | A | done | T-01 |
-| T-03 | Ledger: hash chain + Ed25519 + rfc8785 write/verify | A | todo | T-02 |
+| T-03 | Ledger: hash chain + Ed25519 + rfc8785 write/verify | A | done | T-02 |
 | T-04 | `POST /v1/encounters` (append-before-return) | A | todo | T-03 |
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | todo | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | todo | T-03 |

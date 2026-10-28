@@ -13,13 +13,16 @@ from sqlmodel import Session
 from netra.db.engine import init_db
 from netra.db.models import Device, Site
 from netra.db.util import now_iso
+from netra.ledger.keys import KeyStore
 
 TEST_SITE = "site-07"
 TEST_KID = "device-test"
 
-#: A syntactically valid raw Ed25519 public key for tests that only need the
-#: `devices` row to exist. Signature checks use the `keystore` fixture instead.
-PLACEHOLDER_PUB = "11" * 32
+
+@pytest.fixture
+def keystore(tmp_path) -> KeyStore:
+    """A keystore under tmp_path. Never the repo's `keys/`."""
+    return KeyStore(tmp_path / "keys")
 
 
 @pytest.fixture
@@ -34,8 +37,13 @@ def session(engine):
 
 
 @pytest.fixture
-def registered(session):
-    """One site and one device, so an encounter's foreign keys resolve."""
+def registered(session, keystore):
+    """One site and one device, with the device's real public key stored.
+
+    Verification resolves a signer's public key from `devices`, so a chain
+    signed by an unregistered kid fails - correctly, but not for the reason a
+    test about hashes wants to assert.
+    """
     session.add(
         Site(id=TEST_SITE, name="Test camp", region="test", created_at=now_iso())
     )
@@ -46,7 +54,7 @@ def registered(session):
         Device(
             kid=TEST_KID,
             site_id=TEST_SITE,
-            ed25519_pub=PLACEHOLDER_PUB,
+            ed25519_pub=keystore.public_hex(TEST_KID),
             registered_at=now_iso(),
         )
     )
