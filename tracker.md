@@ -113,6 +113,32 @@ failure anyway: the image ships `scripts/seed_dev.py`, which seeds through
 container. Fixed; `httpx==0.28.1` was already pinned in `requirements.txt`.
 `fly.toml`'s `app` and `primary_region` are marked **SET THIS BEFORE LAUNCH**.
 
+## T-21 — the single-origin shape, walked against a fresh volume (2026-10-30)
+Re-ran the deploy dry-run on an **empty** volume rather than the existing
+`netra.db`, which is the state a first `fly deploy` actually starts from. The
+shape holds: single origin, `NETRA_UI_DIR` set, no Vite proxy; every built
+asset serves with the right content type; a hard refresh on `/sites` gets the
+shell; `/v1/typo` is still a text 404; seeding worked **while that server held
+the database file** (the `fly ssh console -C` case); the whole demo path ran,
+including dedup returning `Idempotency-Replayed: true` with no second entry,
+the tamper to `ok:false` at 60 with every read still answering, and `--force`
+resetting in place back to `ok:true` without restarting the server. Lane B's
+typed client: 13/13 against it.
+- **The one real bug, and it was upstream of the shape:** `netra/ui/.env` was
+  in the Docker build context, where `vite build` reads it. **Git and Docker
+  disagree about one pattern** — git matches a slashless `.gitignore` pattern
+  at every level, so the file is untracked and invisible in review, while
+  Docker matches each `.dockerignore` pattern against the whole relative path,
+  so a bare `.env` covered only the context root. `.env.example` invites
+  `VITE_USE_MOCK=1` for working with no backend; left on through a build it
+  ships a front end whose grades, ledger indices and Wilson intervals are all
+  invented by `src/lib/api/mock.ts`, with every screen rendering and nothing
+  erroring. Fixed with `**/.env` (root pattern kept alongside — no daemon here
+  to prove `**` matches zero directories). Pinned by four tests, one of which
+  exists only to stop the other three going vacuous.
+- The image has **still never been built.** Everything above is a real server
+  and a real bundle, but not a real container.
+
 ## Lane C — what the one Kaggle run has to do (T-08 + T-09)
 `python scripts/package_for_kaggle.py` → upload `kaggle_payload.zip` as a Kaggle
 Dataset → attach it with an APTOS dataset and an EyePACS mirror → T4 + Internet on →

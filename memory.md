@@ -1532,3 +1532,67 @@ then the **test** split, once, and only then.
   queue's `online`-event and interval triggers are not covered by a test, only
   the drain they call. `fly.toml`'s `app` and `primary_region` remain guesses,
   now marked. The quality gate is still SIMULATED.
+
+### 2026-10-30 — Lane A + Lane B — the deploy dry-run on a fresh volume, and the .env that was in the build context
+- what changed: short pre-flight session while Lane C re-trains on Kaggle.
+  Phases 1 and 3 of the brief were **already done** by the previous session
+  (`1e98961` covers both queue triggers with 14 tests; `32c8c44` is
+  `demo/MODEL_LANDING.md`), so both were audited rather than redone. The audit
+  found nothing wrong: `MODEL_LANDING.md`'s load-bearing claims all still check
+  out against the code — the `TODO: swap for real infer.py` marker is at
+  `qualityGate.ts:81`, `callQualityGate` and `assertGateResult` are both there,
+  `CHECKPOINT_ENV = "NETRA_DR_CHECKPOINT"` is at `dr.py:31` and
+  `NETRA_QUICKQUAL_SVM` is read at `quality.py:190`. `netra/models/`,
+  `netra/eval/`, `config/thresholds.yaml` and `infer.py` were read only to
+  confirm those two env-var names, never to change; Lane C's uncommitted
+  `train.py` edit, `train.py.bak` and `train_kaggle_FIXED.ipynb` are exactly as
+  found.
+  - **`netra/ui/.env` was in the Docker build context.** The deploy dry-run was
+    re-run on an EMPTY volume this time (a first `fly deploy` starts there, not
+    from the existing `netra.db`) and the shape itself held; the bug was
+    upstream of it. **Git and Docker disagree about a slashless pattern**: git
+    matches `.env` at every level, so `netra/ui/.env` is untracked and cannot be
+    seen in review, while Docker matches each `.dockerignore` pattern against
+    the whole relative path, so the bare `.env` excluded only the context root.
+    `vite build` reads whatever is there. `.env.example` tells a developer to
+    set `VITE_USE_MOCK=1` to work on screens with no backend — good advice —
+    and left on through a `docker build` it ships a front end whose grades,
+    ledger indices and Wilson intervals are all invented by
+    `src/lib/api/mock.ts`: every screen renders, nothing errors, the numbers are
+    fiction. Fixed with `**/.env`, keeping the root pattern alongside because
+    `**` is documented to match zero directories but no daemon is reachable
+    here to prove it. The code defaults were already the deployed ones
+    (`BASE = import.meta.env.VITE_API_BASE ?? ""` → relative `/v1`; the mock is
+    opt-in on exactly `"1"`), so excluding the file is the whole fix.
+    **Generalise this:** a `.gitignore` pattern and the same `.dockerignore`
+    pattern do not mean the same thing, and the file that falls through the gap
+    is invisible precisely because git caught it.
+  - **Four tests, one of them guarding the other three.** The bundle must not
+    carry the mock's `@mock` model-version marker — verified in BOTH directions
+    against a real `VITE_USE_MOCK=1` build, since with the mock off the
+    responder is tree-shaken and a one-way check would pass on anything. The
+    exclusion test implements Docker's own matching (whole relative path, `**`
+    spanning segments) rather than `fnmatch`, because `fnmatch` would pass
+    `.env` against `netra/ui/.env` and assert nothing; the fourth test holds
+    that matcher to rejecting `netra/api/main.py` and `netra/ui/.env.example`,
+    because a vacuous exclusion test is worse than no test.
+- verified: `pytest -q` **457 passed**; `npm run build` green; `npm test`
+  **182 passed** (13 skipped — the live suite); live suite **13/13** against the
+  deploy-mode single-origin server on :8100. Walked on that server: dedup with
+  `Idempotency-Replayed: true` and no second entry, abstain on `{1,2}`, a reject
+  carrying no set, referral through all four states, 409 from terminal, tamper
+  to `ok:false first_bad_index 60` with `metrics/sites`, site status, checkpoint
+  and `queue/depth` all still 200, and `seed_dev.py --force` resetting in place
+  back to `ok:true` with the server still running. Every built asset serves with
+  the right content type; a hard refresh on `/sites` gets the shell; `/v1/typo`
+  is a text 404.
+- unverified / TBD: **the image has still never been built** — no Docker daemon,
+  fourth session running. **Still no browser/DOM pass**; the Chrome extension
+  was not connected this session either, so no screen has been seen rendering.
+  `useDeviceQueue` itself (the React glue) is still untested — deliberately:
+  the triggers were extracted to `triggers.ts` so the logic that matters is
+  covered without adding a DOM renderer, and the hook is now thin enough that
+  testing it would mean buying a dependency for three lines. `fly.toml`'s `app`
+  and `primary_region` are still guesses, marked. The quality gate is still
+  SIMULATED. One pre-existing ruff I001 in `scripts/gen_device_key.py` (unsorted
+  imports) was left alone as out of lane and out of scope.
