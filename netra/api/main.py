@@ -64,13 +64,22 @@ def cors_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Open the database and the keystore once, for the process lifetime."""
+    """Open the database and the keystore once, and release them on shutdown.
+
+    `engine.dispose()` closes the pooled SQLite connections. It matters more
+    than it looks: without it the process keeps a handle on the database file
+    after the app has stopped, so anything that runs the app in-process and
+    then wants the file - `scripts/seed_dev.py --force`, a test that resets a
+    fixture - cannot delete it on Windows, which refuses to unlink a file
+    another handle holds.
+    """
     engine = init_db()
     app.state.netra = AppState(engine=engine, keystore=KeyStore())
     try:
         yield
     finally:
         app.state.netra = None
+        engine.dispose()
 
 
 class SpaFiles:

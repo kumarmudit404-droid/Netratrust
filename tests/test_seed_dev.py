@@ -107,10 +107,171 @@ def test_there_is_a_referral_part_way_through_the_state_machine(seeded):
     assert referrals[0].state == "contacted"
 
 
-def test_a_second_run_refuses_rather_than_doubling_the_counts(seeded, seed_dev, capsys):
-    code = seed_dev.main(["--db", str(seeded)])
-    assert code == 2
-    assert "already exists" in capsys.readouterr().err
+# --------------------------------------------------------------- idempotency
+#
+# On Fly the database is on a PERSISTENT volume, so a re-run during a redeploy
+# is the normal case, not an edge case. A doubled chain is still a VALID chain -
+# `verify` returns ok:true on it - so nothing downstream would catch this. The
+# demo would simply quote twice the real figures.
+
+
+def _census(db: pathlib.Path) -> dict[str, int]:
+    """Row counts for every table seeding writes to."""
+    from netra.db.models import Device, LedgerEntry, ReferralEvent, Site
+
+    engine = make_engine(str(db))
+    try:
+        with Session(engine) as session:
+            return {
+                model.__name__: len(session.exec(select(model)).all())
+                for model in (
+                    Site,
+                    Device,
+                    Encounter,
+                    Referral,
+                    ReferralEvent,
+                    LedgerEntry,
+                )
+            }
+    finally:
+        # Dispose, or the pooled connection keeps the file open and a later
+        # --force cannot unlink it on Windows.
+        engine.dispose()
+
+
+def _genesis_links(db: pathlib.Path) -> int:
+    from netra.db.models import GENESIS_PREV_HASH, LedgerEntry
+
+    engine = make_engine(str(db))
+    try:
+        with Session(engine) as session:
+            rows = session.exec(
+                select(LedgerEntry).where(LedgerEntry.prev_hash == GENESIS_PREV_HASH)
+            ).all()
+    finally:
+        engine.dispose()
+    return len(rows)
+
+
+@pytest.fixture
+def own_seed(seed_dev, tmp_path):
+    """A database this test alone owns, so it can re-run the seed against it."""
+    db = tmp_path / "netra.db"
+    keys = tmp_path / "keys"
+    assert seed_dev.main(["--db", str(db), "--keys", str(keys)]) == 0
+    return db, keys
+
+
+def test_a_second_run_exits_zero_and_changes_nothing(own_seed, seed_dev):
+    """The property the deploy depends on: re-running is a no-op, not an error.
+
+    Exit 0 matters as much as the no-op. A non-zero exit here would fail a
+    release command that seeds on every boot, so the honest answer to "seed an
+    already-seeded database" is "done, nothing to do".
+    """
+    db, keys = own_seed
+    before = _census(db)
+
+    assert seed_dev.main(["--db", str(db), "--keys", str(keys)]) == 0
+
+    assert _census(db) == before
+
+
+def test_seeding_twice_leaves_one_verifying_chain_of_the_same_length(
+    own_seed, seed_dev
+):
+    db, keys = own_seed
+    with Session(make_engine(str(db))) as session:
+        before = verify(session)
+    assert before.ok
+
+    seed_dev.main(["--db", str(db), "--keys", str(keys)])
+
+    with Session(make_engine(str(db))) as session:
+        after = verify(session)
+    assert after.ok, after.reason
+    # Same number of entries checked: the chain did not grow and did not fork.
+    assert after.checked == before.checked
+
+
+def test_a_second_run_never_creates_a_second_genesis(own_seed, seed_dev):
+    """Two genesis links would mean a second chain started on top of the first."""
+    db, keys = own_seed
+    assert _genesis_links(db) == 1
+
+    seed_dev.main(["--db", str(db), "--keys", str(keys)])
+
+    assert _genesis_links(db) == 1
+
+
+def test_a_second_run_says_what_is_there_rather_than_going_quiet(
+    own_seed, seed_dev, capsys
+):
+    db, keys = own_seed
+    seed_dev.main(["--db", str(db), "--keys", str(keys)])
+    out = capsys.readouterr().out
+    assert "already seeded" in out
+    assert "verify       ok" in out
+
+
+def test_an_existing_but_empty_database_is_seeded_in_place(seed_dev, tmp_path):
+    """What a Fly volume looks like after the API has booted and nothing posted.
+
+    `init_db` runs in the app's lifespan, so the file exists with tables and no
+    rows. Reading that as "already seeded" would leave the demo with an empty
+    ledger, which is the failure this whole section exists to prevent.
+    """
+    from netra.db.engine import init_db
+
+    db = tmp_path / "netra.db"
+    init_db(str(db))
+    assert db.exists()
+
+    assert seed_dev.main(["--db", str(db), "--keys", str(tmp_path / "keys")]) == 0
+
+    census = _census(db)
+    assert census["Encounter"] == sum(spec.n for spec in seed_dev.SITES)
+    with Session(make_engine(str(db))) as session:
+        assert verify(session).ok
+
+
+def test_a_tampered_database_is_reported_and_left_alone(own_seed, seed_dev, capsys):
+    """`netra.ledger.tamper` breaks the chain ON PURPOSE during the demo.
+
+    Re-seeding over it would destroy the evidence the operator is looking at,
+    and appending to a broken chain would hide the break behind valid entries.
+    """
+    db, keys = own_seed
+    before = _census(db)
+
+    import os
+
+    os.environ["NETRA_KEYS_DIR"] = str(keys)
+    from netra.ledger import tamper
+
+    assert tamper.main(["--seq", "50", "--db", str(db)]) == 0
+
+    assert seed_dev.main(["--db", str(db), "--keys", str(keys)]) == 1
+    assert "VERIFY FAILED" in capsys.readouterr().err
+    # Nothing appended: the break stays visible at the index it happened.
+    assert _census(db) == before
+
+
+def test_force_resets_to_the_same_size_rather_than_doubling(own_seed, seed_dev):
+    db, keys = own_seed
+    before = _census(db)
+
+    assert seed_dev.main(["--db", str(db), "--keys", str(keys), "--force"]) == 0
+
+    assert _census(db) == before
+    assert _genesis_links(db) == 1
+
+
+def test_force_on_a_missing_database_is_not_an_error(seed_dev, tmp_path):
+    db = tmp_path / "netra.db"
+    assert (
+        seed_dev.main(["--db", str(db), "--keys", str(tmp_path / "k"), "--force"]) == 0
+    )
 
 
 def test_the_seed_is_reproducible(seed_dev, tmp_path):

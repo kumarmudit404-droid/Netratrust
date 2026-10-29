@@ -29,6 +29,27 @@ look good:
 site-12 is deliberately under the floor. CLAUDE.md forbids a bare percentage
 for n < 30, and a demo where every site clears the floor never shows the rule
 working.
+
+IDEMPOTENT
+----------
+Running this twice must not append a second copy of the chain. On Fly the
+database lives on a PERSISTENT volume, so a re-run during a redeploy would
+double every count and leave the demo quoting twice the real figures, with
+`GET /v1/ledger/verify` still cheerfully returning ok:true because a doubled
+chain is a perfectly valid chain.
+
+So the decision is made on the database's CONTENTS, never on whether the file
+exists (the API's own `init_db` creates an empty file on first boot):
+
+- populated and the chain verifies  -> print what is there and exit 0, writing
+                                       nothing
+- populated and verify FAILS        -> exit 1 and touch nothing. The chain is
+                                       the evidence, and `netra.ledger.tamper`
+                                       breaks it on purpose during the demo;
+                                       silently re-seeding would destroy what
+                                       the operator is looking at
+- empty, or no file at all          -> seed it
+- `--force`                         -> delete it first, then seed
 """
 
 from __future__ import annotations
@@ -40,6 +61,7 @@ import pathlib
 import random
 import sys
 import uuid
+from typing import NamedTuple
 
 # The project root, so `python scripts/seed_dev.py` works from anywhere.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -172,18 +194,127 @@ def create_sites(db_path: str) -> None:
     from netra.db.util import now_iso
 
     engine = init_db(db_path)
-    with Session(engine) as session:
-        for spec in SITES:
-            if session.get(Site, spec.site_id) is None:
-                session.add(
-                    Site(
-                        id=spec.site_id,
-                        name=spec.name,
-                        region=spec.region,
-                        created_at=now_iso(),
+    try:
+        with Session(engine) as session:
+            for spec in SITES:
+                if session.get(Site, spec.site_id) is None:
+                    session.add(
+                        Site(
+                            id=spec.site_id,
+                            name=spec.name,
+                            region=spec.region,
+                            created_at=now_iso(),
+                        )
                     )
-                )
-        session.commit()
+            session.commit()
+    finally:
+        # Windows will not unlink a file that a pooled connection still holds,
+        # so --force would fail with WinError 32 after this ran in-process.
+        engine.dispose()
+
+
+class DbState(NamedTuple):
+    """What is already in a database, as far as seeding is concerned."""
+
+    ledger_entries: int
+    encounters: int
+    #: Entries whose `prev_hash` is the genesis value. Exactly one in a sound
+    #: chain. Two would mean a second chain was started on top of the first.
+    genesis_links: int
+    verify_ok: bool
+    first_bad_index: int | None
+    #: Whether every site has exactly the encounter count its spec asks for.
+    complete: bool
+
+    @property
+    def is_populated(self) -> bool:
+        return bool(self.ledger_entries or self.encounters)
+
+
+def inspect_db(db_path: str, keys_dir: str) -> DbState:
+    """Read-only look at an existing database. Appends nothing.
+
+    `init_db` is called because it is idempotent and because the file may exist
+    with no tables in it - a volume where the API started once and nothing was
+    ever posted. Creating the tables to count zero rows is not a write anyone
+    needs to care about; appending a second chain would be.
+    """
+    from netra.db.engine import init_db
+
+    engine = init_db(db_path)
+    try:
+        state = _read_state(engine, keys_dir)
+    finally:
+        engine.dispose()  # see create_sites: Windows holds the file otherwise
+    return state
+
+
+def _read_state(engine, keys_dir: str) -> DbState:
+    from sqlmodel import Session, func, select
+
+    from netra.db.models import GENESIS_PREV_HASH, Encounter, LedgerEntry
+    from netra.ledger.keys import KeyStore
+    from netra.ledger.verify import verify
+
+    with Session(engine) as session:
+        entries = session.exec(select(func.count()).select_from(LedgerEntry)).one()
+        encounters = session.exec(select(func.count()).select_from(Encounter)).one()
+        genesis = session.exec(
+            select(func.count())
+            .select_from(LedgerEntry)
+            .where(LedgerEntry.prev_hash == GENESIS_PREV_HASH)
+        ).one()
+        complete = all(
+            session.exec(
+                select(func.count())
+                .select_from(Encounter)
+                .where(Encounter.site_id == spec.site_id)
+            ).one()
+            == spec.n
+            for spec in SITES
+        )
+        # The keystore is only a FALLBACK for verify: a signer is resolved from
+        # the `devices` table first, so a database seeded under a different
+        # keys directory still verifies.
+        result = verify(session, KeyStore(keys_dir))
+
+    return DbState(
+        ledger_entries=int(entries),
+        encounters=int(encounters),
+        genesis_links=int(genesis),
+        verify_ok=result.ok,
+        first_bad_index=result.first_bad_index,
+        complete=bool(complete),
+    )
+
+
+def report_already_seeded(db_path: str, state: DbState) -> int:
+    """Say what is there and leave it alone. Exit 0 if the chain is sound."""
+    print(f"database     {db_path} is already seeded")
+    print(f"ledger       {state.ledger_entries} entries, {state.encounters} encounters")
+
+    if not state.verify_ok:
+        print(
+            f"VERIFY FAILED at index {state.first_bad_index}. Refusing to touch "
+            f"this database: the chain is the evidence, and `netra.ledger.tamper` "
+            f"breaks it ON PURPOSE for the demo. Re-seed deliberately with "
+            f"--force if that is really what you want.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("verify       ok")
+    if not state.complete:
+        print(
+            "note: the encounter counts do not match SITES, so this was seeded "
+            "by a different revision or a run that stopped early. Pass --force "
+            "to reset it."
+        )
+    print(
+        "nothing to do - seeding again would append a SECOND copy of the chain, "
+        "double every count, and leave the demo reading twice the real figures"
+    )
+    return 0
 
 
 def seed(db_path: str, keys_dir: str) -> int:
@@ -311,22 +442,37 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="delete an existing database first",
+        help="DELETE an existing database and seed it from scratch",
     )
     args = parser.parse_args(argv)
 
     db = pathlib.Path(args.db)
-    if db.exists():
-        if not args.force:
+
+    if args.force and db.exists():
+        print(f"--force: removing {db} ({db.stat().st_size} bytes)")
+        try:
+            db.unlink()
+        except OSError as exc:
+            # Windows refuses to unlink a file another handle still holds, and
+            # a half-answered traceback is a bad thing to hand an operator who
+            # is resetting a demo.
             print(
-                f"{db} already exists. Appending to a chain that is already "
-                f"populated would double the counts, so this refuses rather "
-                f"than guessing. Pass --force to replace it.",
+                f"could not remove {db}: {exc}. Stop anything using it "
+                f"(the API, a sqlite3 shell) and run this again.",
                 file=sys.stderr,
             )
-            return 2
-        print(f"removing {db} ({db.stat().st_size} bytes)")
-        db.unlink()
+            return 3
+
+    # The decision is made on what is IN the database, not on whether the file
+    # exists. On Fly the volume is persistent and the API's own `init_db`
+    # creates the file on first boot, so "the file is there" says nothing about
+    # whether anything has been seeded - and treating it as "already seeded"
+    # would leave the demo with an empty ledger.
+    if db.exists():
+        state = inspect_db(str(db), args.keys)
+        if state.is_populated:
+            return report_already_seeded(str(db), state)
+        print(f"{db} exists but holds no entries; seeding it in place")
 
     return seed(str(db), args.keys)
 
