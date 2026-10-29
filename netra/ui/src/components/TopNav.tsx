@@ -4,6 +4,7 @@
 import { NavLink } from "react-router-dom"
 import { useQueueDepth } from "@/lib/api/queries"
 import { usingMock } from "@/lib/api/client"
+import { useDeviceQueue } from "@/lib/offline/useDeviceQueue"
 import { StatusBadge } from "./StatusBadge"
 import { cn } from "@/lib/utils"
 
@@ -17,6 +18,11 @@ const ROUTES = [
 
 export function TopNav() {
   const { data, isError } = useQueueDepth()
+  // Two different numbers, and conflating them would be a lie. `device` is
+  // what this handset is holding and has not delivered; `data.queued` is the
+  // SERVER's backlog of deliveries it accepted and has not applied. The server
+  // cannot see the device's queue - that is the whole point of T-19.
+  const device = useDeviceQueue()
 
   return (
     <header className="border-b border-border-subtle bg-bg">
@@ -47,8 +53,24 @@ export function TopNav() {
               mock data
             </span>
           )}
-          {/* Offline is normal for this app, so a queue is never an error. */}
-          {isError ? (
+          {/* A capture the server refused permanently is the one case here
+              that IS an error: the record is not coming back by waiting. */}
+          {device.failed.length > 0 && (
+            <StatusBadge
+              status="error"
+              label={`${device.failed.length} not accepted`}
+            />
+          )}
+
+          {/* Offline is normal for this app, so a queue is never an error.
+              The device's own backlog is named first: it is the one the
+              operator can do something about by finding signal. */}
+          {device.depth > 0 ? (
+            <StatusBadge
+              status="pending-sync"
+              label={`${device.depth} on this device`}
+            />
+          ) : isError ? (
             <StatusBadge status="pending-sync" label="Offline" />
           ) : data && data.queued > 0 ? (
             <StatusBadge status="pending-sync" label={`Queued — ${data.queued} waiting`} />

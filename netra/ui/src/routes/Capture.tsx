@@ -19,7 +19,7 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { SCENARIOS, type Scenario } from "@/lib/gateSim"
 import { callQualityGate } from "@/lib/qualityGate"
 import { shortHash } from "@/lib/sha256"
-import { useCreateEncounter } from "@/lib/api/queries"
+import { deviceQueue, submitEncounter } from "@/lib/offline/sync"
 import { ApiError } from "@/lib/api/client"
 import { useEncounter } from "@/state/encounter"
 import { cn } from "@/lib/utils"
@@ -36,8 +36,10 @@ export default function Capture() {
   const [scenarioKey, setScenarioKey] = useState<string>(SCENARIOS[0].key)
   const [error, setError] = useState<string | null>(null)
   const [deviceSeq, setDeviceSeq] = useState(412)
-
-  const createEncounter = useCreateEncounter()
+  const [recording, setRecording] = useState(false)
+  // True when this capture is on the device and has not reached the server.
+  // NOT an error state: offline is the normal condition at a screening camp.
+  const [queued, setQueued] = useState(false)
 
   async function onPick(file: File) {
     setError(null)
@@ -71,8 +73,12 @@ export default function Capture() {
   async function record(recordAsNoResult: boolean) {
     if (!current) return
     setError(null)
+    setRecording(true)
     try {
-      const res = await createEncounter.mutateAsync({
+      // Through the device queue, always. The encounter is written to the
+      // queue BEFORE it is sent, with its idempotency key, so a capture taken
+      // with no signal is kept and replayed later with that same key (T-19).
+      const { response, queued: stillQueued } = await submitEncounter(deviceQueue, {
         image_sha256: current.imageSha256,
         gate_verdict: current.verdict,
         cause: current.cause,
@@ -83,22 +89,39 @@ export default function Capture() {
         site_id: SITE_ID,
         device_seq: deviceSeq,
       })
-      patchCurrent({ encounterId: res.encounter_id, ledgerIdx: res.ledger_idx })
+
+      setQueued(stillQueued)
+      if (response) {
+        patchCurrent({
+          encounterId: response.encounter_id,
+          ledgerIdx: response.ledger_idx,
+        })
+      }
+      // The device owns device_seq, so it advances whether or not the server
+      // has seen this one yet.
       setDeviceSeq((n) => n + 1)
     } catch (e) {
-      setError(e instanceof ApiError ? `${e.status} — ${e.message}` : "Could not record.")
+      // Only a PERMANENT refusal lands here. submitEncounter queues anything
+      // transient instead of throwing.
+      setError(e instanceof ApiError ? `${e.status} — ${e.message}` : String(e))
+    } finally {
+      setRecording(false)
     }
   }
 
   function retake() {
     setCurrent(null)
     setError(null)
+    setQueued(false)
     if (fileRef.current) fileRef.current.value = ""
     fileRef.current?.click()
   }
 
   const isReject = current?.verdict === "reject"
-  const recorded = Boolean(current?.encounterId)
+  // A queued capture IS recorded - on this device, with its key, waiting to
+  // sync. Treating it as unrecorded would invite the operator to capture the
+  // same patient again.
+  const recorded = Boolean(current?.encounterId) || queued
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-8">
@@ -229,7 +252,7 @@ export default function Capture() {
                           variant="secondary"
                           size="lg"
                           onClick={() => void record(true)}
-                          disabled={createEncounter.isPending || recorded}
+                          disabled={recording || recorded}
                         >
                           {recorded
                             ? "Recorded as no result"
@@ -259,9 +282,9 @@ export default function Capture() {
                       <Button
                         size="lg"
                         onClick={() => void record(false)}
-                        disabled={createEncounter.isPending || recorded}
+                        disabled={recording || recorded}
                       >
-                        {createEncounter.isPending
+                        {recording
                           ? "Recording…"
                           : recorded
                             ? "Recorded"
@@ -277,7 +300,22 @@ export default function Capture() {
                 </Card>
               )}
 
-              {recorded && (
+              {recorded && queued && (
+                <div
+                  className="rounded-md border border-border-subtle bg-surface p-3"
+                  role="status"
+                >
+                  <StatusBadge status="pending-sync" label="Saved on this device" />
+                  <p className="mt-2 max-w-prose text-caption text-text-muted">
+                    No signal, so this capture is queued here and will sync by
+                    itself. It carries its own idempotency key, so a retry
+                    cannot record it twice. There is no ledger index yet — the
+                    server assigns one when it arrives.
+                  </p>
+                </div>
+              )}
+
+              {recorded && !queued && current.encounterId && (
                 <p className="font-mono text-caption text-text-muted tabular">
                   encounter {current.encounterId} · ledger idx {current.ledgerIdx}
                 </p>

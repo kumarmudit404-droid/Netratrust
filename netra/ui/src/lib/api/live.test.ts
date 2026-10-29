@@ -23,6 +23,9 @@
 import { describe, expect, it } from "vitest"
 import { api } from "./client"
 import { callQualityGate } from "@/lib/qualityGate"
+import { SyncQueue } from "@/lib/offline/queue"
+import { memoryStorage } from "@/lib/offline/storage"
+import { apiSender, submitEncounter } from "@/lib/offline/sync"
 
 // Read through `import.meta.env`, not `process.env`: tsconfig.app.json sets
 // `types: ["vite/client"]`, so `process` is not declared and `npm run build`
@@ -229,6 +232,69 @@ describe.skipIf(!LIVE)("live Lane A API", () => {
     expect(after.idx).toBeGreaterThan(before.idx)
     expect(after.head_hash).not.toEqual(before.head_hash)
     expect((await api.verifyLedger()).ok).toBe(true)
+  })
+
+  // ------------------------------------- T-19: the device queue, for real
+
+  it("a capture queued offline replays onto the real ledger", async () => {
+    // The stubs in queue.test.ts prove the queue's logic. This proves the
+    // thing that actually matters: the key it minted is a key THIS server
+    // accepts, and the replay lands one entry.
+    const queue = new SyncQueue(memoryStorage())
+    const before = await api.ledgerCheckpoint()
+
+    const offline = () => Promise.reject(new TypeError("Failed to fetch"))
+    const first = await submitEncounter(
+      queue,
+      {
+        image_sha256: hash(`${run}-queued`),
+        gate_verdict: "usable",
+        cause: null,
+        prediction_set: [0],
+        model_version: `lane-b-live@${run}`,
+        site_id: SITE,
+        device_seq: 9200,
+      },
+      offline,
+    )
+    expect(first.queued).toBe(true)
+    expect(queue.size()).toBe(1)
+
+    // Signal comes back. Replay through the REAL client.
+    const report = await queue.drain(apiSender)
+    expect(report.applied).toHaveLength(1)
+    expect(queue.size()).toBe(0)
+
+    const after = await api.ledgerCheckpoint()
+    expect(after.idx).toBe(before.idx + 1)
+    expect((await api.verifyLedger()).ok).toBe(true)
+  })
+
+  it("delivering one queued entry twice is deduped by the server", async () => {
+    // At-least-once delivery, never exactly-once (SPEC.md section 5). The
+    // guard is the key, and this is the test that it is really the server
+    // enforcing it rather than the queue being careful.
+    const queue = new SyncQueue(memoryStorage())
+    const entry = queue.enqueue({
+      kind: "encounter",
+      payload: {
+        image_sha256: hash(`${run}-replay`),
+        gate_verdict: "usable",
+        cause: null,
+        prediction_set: [0],
+        model_version: `lane-b-live@${run}`,
+        site_id: SITE,
+        device_seq: 9201,
+      },
+    })
+
+    const firstDelivery = await apiSender(entry)
+    const beforeSecond = await api.ledgerCheckpoint()
+    const secondDelivery = await apiSender(entry)
+
+    // Same response, and no second encounter or ledger entry.
+    expect(secondDelivery).toEqual(firstDelivery)
+    expect((await api.ledgerCheckpoint()).idx).toBe(beforeSecond.idx)
   })
 
   it("GET /v1/queue/depth sends the attempt shape Lane A settled on", async () => {
