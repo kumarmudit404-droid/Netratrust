@@ -16,8 +16,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VerdictPanel } from "@/components/VerdictPanel"
 import { StatusBadge } from "@/components/StatusBadge"
-import { SCENARIOS, SIM_MODEL_VERSION, type Scenario } from "@/lib/gateSim"
-import { sha256Hex, shortHash } from "@/lib/sha256"
+import { SCENARIOS, type Scenario } from "@/lib/gateSim"
+import { callQualityGate } from "@/lib/qualityGate"
+import { shortHash } from "@/lib/sha256"
 import { useCreateEncounter } from "@/lib/api/queries"
 import { ApiError } from "@/lib/api/client"
 import { useEncounter } from "@/state/encounter"
@@ -42,16 +43,23 @@ export default function Capture() {
     setError(null)
     setHashing(true)
     try {
-      // Hashed in the browser. The file object is dropped immediately after.
-      const hex = await sha256Hex(file)
-      const sc = SCENARIOS.find((s) => s.key === scenarioKey) ?? SCENARIOS[0]
+      // The ONLY gate call in the front end. It hashes in the browser and the
+      // file object is dropped immediately after; the bytes never leave.
+      // Swapping in the real model is a change to callQualityGate, not here.
+      const gate = await callQualityGate(file, { simScenarioKey: scenarioKey })
+      if (gate.qualityVerdict === null) {
+        // The gate could not run. That is not a verdict, so there is nothing
+        // to record — POST /v1/encounters has no nullable gate_verdict.
+        setError(`The quality gate did not run: ${gate.note}`)
+        return
+      }
       setCurrent({
-        imageSha256: hex,
-        verdict: sc.verdict,
-        cause: sc.cause,
-        scoreMilli: sc.scoreMilli,
-        predictionSet: sc.predictionSet,
-        modelVersion: SIM_MODEL_VERSION,
+        imageSha256: gate.imageSha256,
+        verdict: gate.qualityVerdict,
+        cause: gate.cause,
+        scoreMilli: gate.qualityScoreMilli ?? 0,
+        predictionSet: gate.predictionSet,
+        modelVersion: gate.modelVersion,
       })
     } catch {
       setError("Could not read that file.")
