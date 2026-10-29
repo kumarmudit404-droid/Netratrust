@@ -293,3 +293,62 @@ def test_the_seed_is_reproducible(seed_dev, tmp_path):
 
     # Ids are random per run, so compare the decisions rather than the rows.
     assert fingerprint(first) == fingerprint(second)
+
+
+def test_force_is_safe_while_something_else_holds_the_database(own_seed, seed_dev):
+    """The reset must be visible to a connection that was already open.
+
+    This is why `--force` empties the tables instead of unlinking the file. A
+    reset is usually run with the API up, and deleting the file would either
+    fail (Windows holds it) or silently succeed and leave the running server
+    reading an unlinked inode while the seed filled a different file at the
+    same path - two databases, one path, no error.
+    """
+    from netra.db.engine import make_engine
+    from netra.db.models import Encounter
+
+    db, keys = own_seed
+    holder = make_engine(str(db))  # stands in for the running uvicorn
+    try:
+        with Session(holder) as session:
+            before = session.exec(select(Encounter)).all()
+        assert before
+
+        assert seed_dev.main(["--db", str(db), "--keys", str(keys), "--force"]) == 0
+
+        # Same engine, same file, and it sees the re-seeded rows.
+        with Session(holder) as session:
+            after = session.exec(select(Encounter)).all()
+        assert len(after) == len(before)
+        assert {e.id for e in after} != {e.id for e in before}
+    finally:
+        holder.dispose()
+
+
+def test_force_leaves_a_verifying_chain_and_the_append_only_triggers_back(
+    own_seed, seed_dev
+):
+    """The reset drops the triggers to empty the tables; it must put them back."""
+    from sqlalchemy import text
+
+    from netra.db.engine import make_engine
+    from netra.db.models import APPEND_ONLY_TABLES
+
+    db, keys = own_seed
+    assert seed_dev.main(["--db", str(db), "--keys", str(keys), "--force"]) == 0
+
+    engine = make_engine(str(db))
+    try:
+        with Session(engine) as session:
+            assert verify(session).ok
+            names = set(
+                session.exec(
+                    text("SELECT name FROM sqlite_master WHERE type='trigger'")
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    for table in APPEND_ONLY_TABLES:
+        for op in ("update", "delete"):
+            assert f"trg_{table}_no_{op}" in names, f"{table}/{op} trigger is missing"

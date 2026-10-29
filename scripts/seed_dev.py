@@ -49,7 +49,12 @@ exists (the API's own `init_db` creates an empty file on first boot):
                                        silently re-seeding would destroy what
                                        the operator is looking at
 - empty, or no file at all          -> seed it
-- `--force`                         -> delete it first, then seed
+- `--force`                         -> empty every table and seed again
+
+`--force` empties the tables rather than deleting the file, so it is safe to
+run while the API is up. Deleting the file is not: Windows refuses, and Linux
+allows it and leaves the running server serving the unlinked inode while this
+script seeds a different file at the same path.
 """
 
 from __future__ import annotations
@@ -288,6 +293,62 @@ def _read_state(engine, keys_dir: str) -> DbState:
     )
 
 
+#: Child-first, because foreign keys are ON: a parent cannot go before its
+#: children. `sites` is last for the same reason.
+_CLEAR_ORDER = (
+    "referral_events",
+    "referrals",
+    "encounters",
+    "devices",
+    "sites",
+    "ledger",
+    "checkpoints",
+    "idempotency_keys",
+)
+
+
+def reset_in_place(db_path: str) -> None:
+    """Empty every table, keeping the same FILE.
+
+    Deliberately not `unlink`, and the reason is a footgun rather than a
+    preference. A reset is most often run while the API is up:
+
+    - On Windows the unlink simply FAILS - the file is held - so --force did
+      nothing.
+    - On Linux it SUCCEEDS, and that is worse. The running uvicorn keeps its
+      handle on the now-unlinked inode and goes on serving the old database,
+      while this script creates a new file and seeds that. Two databases, one
+      path, no error anywhere. The demo would show a stale ledger and nothing
+      would say why.
+
+    Emptying the tables keeps one inode, so whoever has the file open sees the
+    reset. The append-only triggers have to come off to do it, which is the
+    same admission `netra.ledger.tamper` makes: the triggers stop the
+    APPLICATION from rewriting history, not someone with direct access.
+    """
+    from sqlalchemy import text
+    from sqlmodel import Session
+
+    from netra.db.engine import (
+        drop_append_only_triggers,
+        init_db,
+        install_append_only_triggers,
+    )
+    from netra.db.models import APPEND_ONLY_TABLES
+
+    engine = init_db(db_path)
+    try:
+        for table in APPEND_ONLY_TABLES:
+            drop_append_only_triggers(engine, table)
+        with Session(engine) as session:
+            for table in _CLEAR_ORDER:
+                session.exec(text(f"DELETE FROM {table}"))  # type: ignore[call-overload]
+            session.commit()
+        install_append_only_triggers(engine)
+    finally:
+        engine.dispose()
+
+
 def report_already_seeded(db_path: str, state: DbState) -> int:
     """Say what is there and leave it alone. Exit 0 if the chain is sound."""
     print(f"database     {db_path} is already seeded")
@@ -449,18 +510,11 @@ def main(argv: list[str] | None = None) -> int:
     db = pathlib.Path(args.db)
 
     if args.force and db.exists():
-        print(f"--force: removing {db} ({db.stat().st_size} bytes)")
+        print(f"--force: emptying {db} ({db.stat().st_size} bytes)")
         try:
-            db.unlink()
-        except OSError as exc:
-            # Windows refuses to unlink a file another handle still holds, and
-            # a half-answered traceback is a bad thing to hand an operator who
-            # is resetting a demo.
-            print(
-                f"could not remove {db}: {exc}. Stop anything using it "
-                f"(the API, a sqlite3 shell) and run this again.",
-                file=sys.stderr,
-            )
+            reset_in_place(str(db))
+        except Exception as exc:  # noqa: BLE001 - the operator needs the reason
+            print(f"could not reset {db}: {exc}", file=sys.stderr)
             return 3
 
     # The decision is made on what is IN the database, not on whether the file
