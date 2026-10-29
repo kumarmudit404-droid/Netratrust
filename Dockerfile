@@ -49,6 +49,20 @@ WORKDIR /app
 #   rfc8785                           - canonical JSON, on write AND verify
 #   numpy/scipy/scikit-learn          - netra/eval/metrics.py, via the Wilson
 #                                       interval that every rate goes through
+#   httpx                             - NOT for the API. scripts/seed_dev.py is
+#                                       in this image and seeds through
+#                                       fastapi.testclient, which refuses to
+#                                       import without httpx (or httpx2). httpx2
+#                                       is in the dev venv only as a transitive
+#                                       dependency of a Lane C package, so a
+#                                       slim image that skipped both would fail
+#                                       the FIRST command anyone runs after a
+#                                       deploy:
+#                                         fly ssh console -C "python scripts/seed_dev.py"
+#
+# config/thresholds.yaml needs NO YAML parser: netra/api/config.py reads the
+# flat subset it uses with the stdlib, deliberately, because PyYAML is not
+# pinned in requirements.txt either.
 RUN pip install --no-cache-dir \
       fastapi==0.162.0 \
       starlette==1.6.0 \
@@ -60,7 +74,8 @@ RUN pip install --no-cache-dir \
       rfc8785==0.1.4 \
       numpy==2.5.4 \
       scipy==1.18.1 \
-      scikit-learn==1.9.1
+      scikit-learn==1.9.1 \
+      httpx==0.28.1
 
 # Only what the API needs at runtime. netra/models and notebooks are omitted on
 # purpose - see the header.

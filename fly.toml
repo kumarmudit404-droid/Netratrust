@@ -20,7 +20,13 @@
 # claim, broken permanently. Both paths live under /data for that reason, and
 # `tests/test_deploy.py` fails if either moves outside it.
 
+# SET THIS BEFORE LAUNCH - a guess, not a decision. Fly app names are globally
+# unique, so this one is very likely taken and `fly launch` will reject it.
 app = "netratrust"
+# SET THIS BEFORE LAUNCH - a guess. Pick the region nearest the demo machine:
+# the ledger is one SQLite file on one volume, so every request crosses the
+# network to this region and there is no replica to read from. `fly platform
+# regions` lists them (bom = Mumbai).
 primary_region = "bom"
 
 [build]
@@ -37,6 +43,8 @@ primary_region = "bom"
   NETRA_CORS_ORIGINS = ""
 
 [[mounts]]
+  # Must match the name in `fly volumes create`, and the volume must be in
+  # primary_region or the machine will not start.
   source = "netra_data"
   destination = "/data"
 
