@@ -396,3 +396,88 @@ def test_a_fresh_volume_first_boot_creates_its_own_keystore(tmp_path, monkeypatc
     init_db().dispose()
     assert len(KeyStore().public_hex(SERVER_KID)) == 64
     assert (tmp_path / "keys").is_dir()
+
+
+# ------------------------------------------- the mock must never reach an image
+#
+# Found by walking the deployed shape: `netra/ui/.env` is UNTRACKED, because
+# git matches a slashless `.gitignore` pattern at every level - and it was in
+# the build context anyway, because Docker matches each `.dockerignore` pattern
+# against the whole relative path, so a bare `.env` covered only the root. A
+# file nobody can see in review, feeding `vite build`.
+#
+# What that costs is the reason these two tests exist. `.env.example` tells a
+# developer to set `VITE_USE_MOCK=1` to work on screens with no backend, which
+# is good advice; left on through a `docker build` it ships a front end whose
+# grades, ledger indices and Wilson intervals are all invented by
+# `src/lib/api/mock.ts`. Every screen renders, nothing errors, and the numbers
+# are fiction. There is no worse failure available to this project.
+
+
+#: `mock.ts`'s MODEL_VERSION. It appears in a mock build and in no other,
+#: because with `VITE_USE_MOCK` unset the responder is tree-shaken out.
+MOCK_MARKER = "@mock"
+
+
+def test_the_built_bundle_carries_no_mock_responder():
+    """A deployed bundle must talk to the real API, not to `mock.ts`."""
+    dist = ROOT / "netra" / "ui" / "dist" / "assets"
+    if not dist.is_dir():
+        pytest.skip("netra/ui/dist is not built; run npm run build")
+
+    bundles = list(dist.glob("*.js"))
+    assert bundles, "no JS bundle in dist/assets"
+    for bundle in bundles:
+        source = bundle.read_text(encoding="utf-8", errors="replace")
+        assert MOCK_MARKER not in source, (
+            f"{bundle.name} was built with VITE_USE_MOCK=1: every screen in it "
+            f"serves invented clinical data. Rebuild with the mock off."
+        )
+
+
+def _dockerignore_patterns() -> list[str]:
+    text = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _excluded_from_build_context(path: str) -> bool:
+    """Whether `.dockerignore` keeps `path` (relative, forward slashes) out.
+
+    Docker matches each pattern against the WHOLE relative path, with `**`
+    spanning any number of segments. That is the rule the bug turned on, so it
+    is the rule this translation implements - a `fnmatch` here would pass a
+    bare `.env` against `netra/ui/.env` and assert nothing.
+    """
+    for pattern in _dockerignore_patterns():
+        body = (
+            re.escape(pattern).replace(r"\*\*/", "(?:[^/]+/)*").replace(r"\*", "[^/]*")
+        )
+        # A directory pattern (`keys/`) excludes everything beneath it.
+        if pattern.endswith("/"):
+            body += ".*"
+        if re.fullmatch(body, path):
+            return True
+    return False
+
+
+@pytest.mark.parametrize("env_file", ["", "netra/ui/"])
+def test_the_build_context_excludes_every_env_file(env_file):
+    """At the root AND nested. The nested one is the one that bit."""
+    path = f"{env_file}.env"
+    assert _excluded_from_build_context(path), (
+        f"{path} would be in the build context, where `vite build` reads it"
+    )
+
+
+def test_the_env_exclusion_test_can_actually_fail():
+    """Guard the translation above: it must not pass everything.
+
+    A matcher that accidentally matched any path would make the two tests
+    before this one vacuous, and vacuous is worse than absent here.
+    """
+    assert not _excluded_from_build_context("netra/api/main.py")
+    assert not _excluded_from_build_context("netra/ui/.env.example")

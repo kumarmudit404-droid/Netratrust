@@ -4,7 +4,26 @@
 # Ed25519 PRIVATE keys. They belong on the Fly volume, created on first run,
 # never baked into an image that anyone can pull.
 keys/
+
+# EVERY .env, at any depth - `**/` is load-bearing. A bare `.env` matches only
+# the context root here, because Docker matches each pattern against the whole
+# relative path. Git is the opposite: a pattern with no slash matches at every
+# level, so `netra/ui/.env` is untracked and invisible in review while still
+# sitting in the build context, where `vite build` reads it. That asymmetry is
+# the trap: `netra/ui/.env.example` invites `VITE_USE_MOCK=1` for working on
+# screens with no backend, and a developer who leaves it on ships an image
+# whose every screen serves fabricated clinical data from the in-memory mock -
+# grades, ledger indices, Wilson intervals - with nothing in review, in the
+# build log or in the running app to say so. Excluded, the image builds on the
+# code defaults, which are the deployed ones: empty base -> relative `/v1`,
+# and the mock off unless VITE_USE_MOCK is exactly "1".
+#
+# Both spellings, deliberately. `**` is documented to match zero directories
+# too, so `**/.env` should already cover the root - but no Docker daemon is
+# reachable here to prove it, and the cost of being wrong is shipping the one
+# file this list exists to keep out. The root pattern is two bytes.
 .env
+**/.env
 
 # Local ledger. Shipping it would overwrite nothing (the volume wins) but it is
 # local clinical-shaped data and has no business in an image.
