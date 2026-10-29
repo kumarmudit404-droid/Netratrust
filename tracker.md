@@ -36,13 +36,41 @@ B (Frontend), C (ML & Evaluation).
 | T-15 | Grade/Abstain route + prediction set ("a doctor should check this") | B | done | T-13, T-10 |
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | done | — |
 | T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | done | — |
-| T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | todo | T-04, T-13 |
+| T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | done | T-04, T-13 |
 | T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); typed client now sends a key on all four mutations (Lane B); device-side queue outstanding | A | doing | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
-| T-21 | Deploy to Fly.io (volume for SQLite) | A | todo | T-18 |
+| T-21 | Deploy to Fly.io (volume for SQLite) | A | doing | T-18 |
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |
 | T-23 | Rehearse 3-min demo on deployed URL; recorded fallback | all | todo | T-21 |
 | T-24 | **Hard stop** (Fri 12:00) | all | todo | — |
+
+## T-18 — what the integration checkpoint actually proved (2026-10-29)
+Backend + front end run together; the model is still simulated behind ONE seam.
+- `scripts/seed_dev.py` seeds four sites, 117 encounters, four audits and one
+  referral THROUGH the real endpoints, so the seeded chain verifies. Run it
+  before any demo: `POST /v1/encounters` 404s on an unknown site and the UI
+  posts to `site-07`.
+- Full path driven against uvicorn :8000 + Vite :5173: capture (hash on device)
+  -> encounter at ledger idx 125 -> verify ok -> referral issued -> four
+  transitions -> head 124 -> 130 -> verify still ok. Illegal transitions 409.
+- Tamper demo against the LIVE API: `ok:true` -> `python -m netra.ledger.tamper
+  --seq 60` -> `ok:false first_bad_index 60` -> restored.
+- Lane B's typed client against live Lane A: 11/11 (`VITE_NETRA_LIVE=1`),
+  including the whole path in one test, cross-origin, and dedup on retry.
+- **Not covered:** no DOM/browser pass. The Chrome extension is not connected
+  (same blocker as 2026-10-28), so no screen has been seen rendering. Route
+  modules are served and transform cleanly, and the data layer is tested, but
+  "it looks right" is unverified. **TBD — verify before the demo.**
+
+## T-21 — ready to ship, not shipped
+`Dockerfile` + `fly.toml` + `.dockerignore` are in. One command deploys:
+`fly deploy` (after a one-time `fly launch --no-deploy --copy-config` and
+`fly volumes create netra_data --size 1 --region bom`). One machine, because a
+Fly volume attaches to one and SQLite has one writer. `NETRA_DB` **and**
+`NETRA_KEYS_DIR` live under `/data`: lose the Ed25519 keys and every existing
+entry fails verify with `unknown signer_kid`. The image installs the eleven
+packages the API imports at `requirements.txt`'s pins rather than the whole
+file — torch is not in it and `netra/models` is not copied.
 
 ## Lane C — what the one Kaggle run has to do (T-08 + T-09)
 `python scripts/package_for_kaggle.py` → upload `kaggle_payload.zip` as a Kaggle

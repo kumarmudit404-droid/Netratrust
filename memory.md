@@ -1393,3 +1393,73 @@ random-init densenet features over synthetic pixels and means nothing.
 `manifest_full.csv`; re-run `fit_thresholds` with both real artifacts in place (the
 quality cut-points should now be fittable against real EyeQ labels rather than refused);
 then the **test** split, once, and only then.
+
+### 2026-10-29 — Lane A + Lane B — T-18 integration checkpoint, T-21 deploy prep, and the gate seam
+- what changed: one session covering BOTH Lane A and Lane B, by instruction, while
+  Lane C's Kaggle run is still training. Nothing under `netra/models/`,
+  `netra/eval/` or `config/thresholds.yaml` was touched.
+  - **`netra/ui/src/lib/qualityGate.ts` — THE SEAM (new).** `callQualityGate()` is
+    now the only way the front end gets a verdict; `Capture.tsx` no longer reaches
+    into `SCENARIOS` or hashes the file itself. `GateResult` is field-for-field
+    equivalent to `netra.models.infer.InferenceResult` (camelCase vs snake_case),
+    so the swap is a rename, not a redesign. `assertGateResult` enforces the
+    invariants on the way out and guards the REAL model too: a reject carries no
+    prediction set and no grade, `[]` is refused rather than read as a graded empty
+    set, and the score stays a scaled integer. The `// TODO: swap for real
+    infer.py` sits on the one line that has to change. 23 tests.
+  - **`netra/api/routes/encounters.py` — a real bug fixed.** With no `X-Device-Kid`
+    header the handler auto-registers a device, and the default kid was the fixed
+    string `device-1`. The SECOND site to auto-register therefore tried to INSERT a
+    primary key the first already held: `UNIQUE constraint failed: devices.kid`, a
+    500 on a valid request. Every earlier test used one site, and `conftest`'s
+    `registered` fixture pre-registers a device for it, so no test ever triggered a
+    second auto-registration. Kids are now the first free `device-N`. Six new tests
+    across two deviceless sites; three fail on the old code.
+  - **`scripts/seed_dev.py` (new).** Four sites, 117 encounters, four audits, one
+    referral at `contacted` — created through the REAL endpoints via `TestClient`,
+    never by INSERTing rows, so the seeded chain verifies and the script checks that
+    it does before exiting 0. site-12 has n=12 ON PURPOSE: the n<30 rule cannot be
+    demonstrated if every site clears the floor. site-21 is drift-flagged, so its
+    audit fails and it stays `unpinned`. Refuses an existing DB without `--force`.
+  - **`Dockerfile` + `fly.toml` + `.dockerignore` (new, T-21).** Node builds the SPA,
+    python serves it behind the API, one machine. The image does NOT
+    `pip install -r requirements.txt`: `netra/api` imports no model code, so it
+    installs the eleven packages it does import at requirements.txt's own pins
+    (verified by importing `netra.api.main` and reading `sys.modules`). torch is
+    absent and `netra/models` is not copied. `requirements.txt` was NOT edited.
+  - **`netra/api/main.py` — env-gated SPA mount.** `NETRA_UI_DIR` unset leaves the
+    app as exactly the frozen nine. `SpaFiles` is an ASGI wrapper, not a route,
+    because `tests/test_sites.py` pins the `/v1` routes at nine and that test is
+    right. It falls back to `index.html` itself — `StaticFiles(html=True)` does NOT
+    do SPA fallback, it looks for `404.html` — while keeping `/v1/typo` a 404
+    instead of 200-with-HTML.
+  - **`netra/ui/vite.config.ts`** — `testTimeout: 30s`. `npm test` was RED on HEAD
+    with a clean tree: `routes.smoke.test.ts` imports Sites, which pulls Recharts,
+    and transforming it cold took 7039ms against a 5000ms default. Green on a
+    re-run once the cache was warm, i.e. the gate reported on `node_modules/.vite`
+    rather than on the code.
+  - **`types.ts` / `client.ts`** — the three `TODO(Lane A)` shapes were settled on
+    2026-10-28 and pinned by `tests/test_integration.py`; the comments saying they
+    were TBD were retired. `SiteAuditRequest` is now the real seven fields instead
+    of `Record<string, unknown>`, and `attempts` is `QueueAttempt[]`.
+- verified: `pytest -q` **436 passed**. `npm run build` green (`tsc -b` included).
+  `npm test` **135 passed**, green from a cold Vite cache. Live suite **11/11**
+  against uvicorn :8000 with `VITE_NETRA_LIVE=1`, including one test that walks the
+  whole path through the seam. End to end against uvicorn :8000 + Vite :5173:
+  encounter at ledger idx 125 -> verify ok -> referral -> four transitions -> head
+  124 to 130 -> verify still ok; terminal-state transition 409. Tamper demo on the
+  LIVE API: `ok:true` -> `tamper --seq 60` -> `ok:false first_bad_index 60` ->
+  restored. Deployed shape exercised on :8001 against the real `dist/`: shell, five
+  deep links, assets, PWA manifest, service worker, API, `/v1/typo` 404 text/plain,
+  and `/../../etc/passwd` serving the shell rather than a file.
+- unverified / TBD: **no browser/DOM pass.** The Chrome extension reports "not
+  connected", the same blocker as 2026-10-28, so not one screen has been SEEN
+  rendering in this session. The data layer is tested and every route module is
+  served and transforms cleanly, but layout, contrast in situ and the forest plot's
+  appearance are unverified — **TBD, verify before the demo.** **The deploy has not
+  been run**: `fly.toml`'s `app = "netratrust"` and `primary_region = "bom"` are
+  guesses, no Fly app or volume exists, and the image has never been built — Docker
+  was not invoked, so the Dockerfile is reviewed and tested-by-parsing only. The
+  quality gate is still SIMULATED; nothing here loads a Lane C artifact.
+  `scripts/gen_device_key.py` carries one pre-existing `ruff` I001 finding, left
+  untouched as it predates this session.
