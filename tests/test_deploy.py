@@ -333,3 +333,66 @@ def test_the_operator_is_told_which_fly_values_are_guesses(fly):
             assert "SET THIS BEFORE LAUNCH" in preceding, (
                 f"{key} is a guess and says so nowhere"
             )
+
+
+# --------------------------------------------- the single-origin deployed shape
+#
+# In the deployed container the SPA and the API share ONE origin: the bundle
+# calls a relative `/v1`, there is no Vite proxy and no cross-origin request.
+# Local dev is the opposite - two ports and a proxy - so these are the
+# properties that only the deployed shape has.
+
+
+def test_the_built_bundle_hardcodes_no_dev_origin():
+    """`VITE_API_BASE` empty means relative `/v1`. A baked-in dev host would
+    make the deployed app call the presenter's laptop."""
+    dist = ROOT / "netra" / "ui" / "dist" / "assets"
+    if not dist.is_dir():
+        pytest.skip("netra/ui/dist is not built; run npm run build")
+
+    bundles = list(dist.glob("*.js"))
+    assert bundles, "no JS bundle in dist/assets"
+    for bundle in bundles:
+        source = bundle.read_text(encoding="utf-8", errors="replace")
+        for origin in ("localhost:8000", "127.0.0.1:8000", "localhost:5173"):
+            assert origin not in source, f"{bundle.name} hardcodes {origin}"
+
+
+def test_the_database_directory_is_not_created_silently():
+    """A missing `/data` means the volume did not mount. Creating it would put
+    the ledger on the container filesystem, where the next deploy discards it."""
+    from netra.db.engine import DatabaseDirectoryMissing, make_engine
+
+    missing = ROOT / "does-not-exist-anywhere" / "netra.db"
+    with pytest.raises(DatabaseDirectoryMissing) as caught:
+        make_engine(str(missing))
+
+    # The message has to name the cause, not just the symptom: SQLite says
+    # "unable to open database file" for a missing directory, a bad path and a
+    # read-only disk alike.
+    assert "volume" in str(caught.value)
+    assert not missing.parent.exists(), "the directory must NOT be created"
+
+
+def test_an_existing_directory_is_accepted(tmp_path):
+    from netra.db.engine import make_engine
+
+    engine = make_engine(str(tmp_path / "netra.db"))
+    engine.dispose()
+
+
+def test_a_fresh_volume_first_boot_creates_its_own_keystore(tmp_path, monkeypatch):
+    """First boot on a new Fly volume: /data exists, nothing is in it.
+
+    The keystore has to create itself, or the first encounter cannot be signed
+    and every later verify fails with `unknown signer_kid`.
+    """
+    from netra.db.engine import init_db
+    from netra.ledger.keys import SERVER_KID, KeyStore
+
+    monkeypatch.setenv("NETRA_DB", str(tmp_path / "netra.db"))
+    monkeypatch.setenv("NETRA_KEYS_DIR", str(tmp_path / "keys"))
+
+    init_db().dispose()
+    assert len(KeyStore().public_hex(SERVER_KID)) == 64
+    assert (tmp_path / "keys").is_dir()

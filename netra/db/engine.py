@@ -9,6 +9,7 @@ rules.md section 1.
 from __future__ import annotations
 
 import os
+import pathlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -26,7 +27,42 @@ def database_url(path: str | None = None) -> str:
     return f"sqlite:///{path or os.environ.get('NETRA_DB') or DEFAULT_DB_PATH}"
 
 
+class DatabaseDirectoryMissing(RuntimeError):
+    """The database's parent directory does not exist. Almost always a volume."""
+
+
+def _check_parent_directory(url: str) -> None:
+    """Fail with the actual cause before SQLite fails with a vague one.
+
+    SQLite answers `unable to open database file` whether the path is wrong,
+    the directory is missing or the disk is read-only. On Fly that message is
+    what you get when the volume did not attach or `[[mounts]]` names a volume
+    that does not exist, and it tells you none of that.
+
+    This deliberately does NOT create the directory. If `/data` is absent
+    because the volume failed to mount, creating it would put the ledger on the
+    container filesystem, where it works perfectly until the next deploy
+    silently discards every entry. An error at boot is the only safe answer.
+    """
+    if not url.startswith("sqlite:///"):
+        return
+    path = url[len("sqlite:///") :]
+    if not path or path == ":memory:":
+        return
+    parent = pathlib.Path(path).parent
+    if parent and not parent.exists():
+        raise DatabaseDirectoryMissing(
+            f"{parent} does not exist, so the database at {path} cannot be "
+            f"opened. On Fly this means the volume is not mounted: check that "
+            f"[[mounts]] in fly.toml names a volume that exists in this "
+            f"region (`fly volumes list`). The directory is NOT created here "
+            f"on purpose - a ledger written outside the volume is discarded by "
+            f"the next deploy."
+        )
+
+
 def make_engine(path: str | None = None, echo: bool = False):
+    _check_parent_directory(database_url(path))
     engine = create_engine(
         database_url(path),
         echo=echo,
