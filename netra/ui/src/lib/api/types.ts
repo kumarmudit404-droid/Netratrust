@@ -9,8 +9,10 @@
  *  - Fundus images are NEVER uploaded. Only the hash, the decisions, metadata.
  *
  * Where SPEC.md describes a response in prose rather than naming fields, the
- * shape below is marked TBD and must be confirmed with Lane A before it is
- * relied on. Nothing here invents a field the contract does not imply.
+ * shape was agreed with Lane A and is pinned from the server side by
+ * `tests/test_integration.py`, which parses these interfaces and compares the
+ * field names to live responses. Nothing here invents a field the contract
+ * does not imply.
  */
 
 // ---------------------------------------------------------------- shared
@@ -37,7 +39,11 @@ export type Grade = 0 | 1 | 2 | 3 | 4
 export interface RateCounts {
   k: number
   n: number
-  /** Wilson 95% bounds from the server. Absent until Lane A supplies them. */
+  /** Wilson 95% bounds, computed server-side by
+   *  `netra.eval.metrics.wilson_interval` - the single source for every number
+   *  this team reports. Lane A sends it on every rate; it stays optional so a
+   *  renderer degrades to the bare counts instead of throwing, which is the
+   *  safer failure for a clinical screen. */
   ci?: [number, number]
 }
 
@@ -111,11 +117,14 @@ export interface LedgerCheckpointResponse {
 // --------------------------------------------- GET/POST /v1/sites
 
 /** SPEC.md: "model version, last audit, gradability rate, drift flag".
- *  TBD — verify the exact field names with Lane A. `gradability` is modelled
- *  as counts rather than a bare rate because CLAUDE.md forbids a bare
- *  percentage for n < 30.
- *  TODO(Lane A): GET /v1/sites/{id}/status must return gradability as counts
- *  {k, n, ci} — a bare rate cannot satisfy the n<30 rule. Match this or raise. */
+ *
+ *  SETTLED with Lane A. `gradability` is counts, not a bare rate, because
+ *  CLAUDE.md forbids a bare percentage for n < 30 and the denominator is what
+ *  that rule needs. `model_version` is the non-nullable sentinel "unpinned"
+ *  until an audit passes — see modelVersion.ts.
+ *
+ *  `tests/test_integration.py` parses this interface and compares its field
+ *  names to the live response, so the two sides cannot drift silently. */
 export interface SiteStatusResponse {
   site_id: string
   model_version: string
@@ -125,11 +134,27 @@ export interface SiteStatusResponse {
   drift_flag: boolean
 }
 
-/** POST /v1/sites/{id}/audit takes an "audit payload" — SPEC.md does not
- *  enumerate its fields. TBD — verify with Lane A before sending one.
- *  TODO(Lane A): define the audit payload fields, then replace this
- *  Record<string, unknown> with the real shape. */
-export type SiteAuditRequest = Record<string, unknown>
+/** POST /v1/sites/{id}/audit — the payload SPEC.md section 6 describes but
+ *  does not enumerate. SETTLED with Lane A, and everything is COUNTS rather
+ *  than rates because this payload is appended to the ledger, where floats are
+ *  banned.
+ *
+ *  `passed` is NOT sent: the server computes it from
+ *  `gradable_n >= min_n && agreement_n >= min_n && !drift_flag`, so a client
+ *  cannot assert that a site passed its own audit. */
+export interface SiteAuditRequest {
+  pinned_model_version: string
+  /** Images the gate admitted, over images it saw. */
+  gradable_k: number
+  gradable_n: number
+  /** Gate-vs-human agreement, over cases a human also read. */
+  agreement_k: number
+  agreement_n: number
+  /** Grade histogram, keyed by the grade as a string. Optional. */
+  grade_counts?: Record<string, number>
+  /** Optional; defaults to false server-side. A flagged site cannot pass. */
+  drift_flag?: boolean
+}
 
 export interface SiteAuditResponse {
   passed: boolean
@@ -154,12 +179,27 @@ export interface SiteMetricsResponse {
 
 // ------------------------------------------ GET /v1/queue/depth
 
-/** SPEC.md: `{queued:int, synced:int, attempts:[...]}`. The element type of
- *  `attempts` is not specified. TBD — verify with Lane A.
- *  TODO(Lane A): specify the element type of `attempts`; it is typed
- *  unknown[] until then so no screen can rely on a guessed field. */
+/** One delivery attempt the SERVER has seen, newest first.
+ *
+ *  SETTLED with Lane A: this is a row of `idempotency_keys`, which is the only
+ *  attempt data the server holds. It is a DELIVERY record, not a clinical
+ *  queue — nothing here is a case waiting for a specialist. */
+export interface QueueAttempt {
+  key: string
+  endpoint: string
+  status: "in_flight" | "done"
+  created_at: string
+}
+
+/** SPEC.md: `{queued:int, synced:int, attempts:[...]}`.
+ *
+ *  `queued` is the server's view of the sync backlog — deliveries accepted and
+ *  not yet applied. It is NOT the device's local queue, which the server cannot
+ *  see, and NOT a count of cases a clinician has still to read. SPEC.md
+ *  section 5 puts the connectivity flag server-side so this figure survives a
+ *  page navigation and a second browser tab. */
 export interface QueueDepthResponse {
   queued: number
   synced: number
-  attempts: unknown[]
+  attempts: QueueAttempt[]
 }

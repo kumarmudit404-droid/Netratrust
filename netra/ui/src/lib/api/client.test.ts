@@ -86,7 +86,15 @@ describe("every mutating call sends an Idempotency-Key", () => {
   })
 
   it("siteAudit does", async () => {
-    await api.siteAudit("site-07", { pinned_model_version: "x" })
+    // A complete payload now that Lane A has enumerated the audit fields:
+    // the counts are required, and `passed` is the server's to compute.
+    await api.siteAudit("site-07", {
+      pinned_model_version: "x",
+      gradable_k: 28,
+      gradable_n: 34,
+      agreement_k: 25,
+      agreement_n: 28,
+    })
     expect(calls[0].headers["Idempotency-Key"]).toMatch(UUID_V4)
   })
 })

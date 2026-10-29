@@ -235,12 +235,16 @@ describe.skipIf(!LIVE)("live Lane A API", () => {
     const res = await api.queueDepth()
     expect(Object.keys(res).sort()).toEqual(["attempts", "queued", "synced"])
     expect(res.synced).toBeGreaterThan(0)
-    const attempt = res.attempts[0] as Record<string, unknown>
+    // `attempts` is QueueAttempt[] now that Lane A has settled the element
+    // type, so this reads the fields rather than casting to a bag of unknowns.
+    const attempt = res.attempts[0]
     expect(Object.keys(attempt).sort()).toEqual([
       "created_at",
       "endpoint",
       "key",
       "status",
     ])
+    expect(attempt.endpoint).toMatch(/^(GET|POST|PATCH) \/v1\//)
+    expect(["in_flight", "done"]).toContain(attempt.status)
   })
 })

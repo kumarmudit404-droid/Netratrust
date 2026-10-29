@@ -137,8 +137,8 @@ export const api = {
     return request<LedgerCheckpointResponse>("GET", "/v1/ledger/checkpoint")
   },
 
-  /** GET /v1/sites/{id}/status
-   *  TODO(Lane A): response shape is TBD — see SiteStatusResponse in types.ts. */
+  /** GET /v1/sites/{id}/status -> model version, last audit, gradability
+   *  counts, drift flag. Shape settled with Lane A; see types.ts. */
   siteStatus(siteId: string): Promise<SiteStatusResponse> {
     if (USE_MOCK) return mock.siteStatus(siteId)
     return request<SiteStatusResponse>(
@@ -170,8 +170,8 @@ export const api = {
     return request<SiteMetricsResponse>("GET", "/v1/metrics/sites")
   },
 
-  /** GET /v1/queue/depth -> {queued, synced, attempts}
-   *  TODO(Lane A): `attempts` element type is TBD — see QueueDepthResponse. */
+  /** GET /v1/queue/depth -> {queued, synced, attempts}. `attempts` elements
+   *  are delivery records (a row of `idempotency_keys`), not clinical cases. */
   queueDepth(): Promise<QueueDepthResponse> {
     if (USE_MOCK) return mock.queueDepth()
     return request<QueueDepthResponse>("GET", "/v1/queue/depth")
