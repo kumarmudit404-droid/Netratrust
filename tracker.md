@@ -37,12 +37,19 @@ B (Frontend), C (ML & Evaluation).
 | T-16 | Sites route: Recharts forest plot + Wilson intervals (shared `formatRate`) | B | done | — |
 | T-17 | Ledger route: verify + checkpoint display + **tamper demo** (append → corrupt one entry → `verify` returns `ok:false` with `first_bad_index`) — SPEC §7. Corrupt step is `python -m netra.ledger.tamper --seq N`, NOT an endpoint | B | done | — |
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | done | T-04, T-13 |
-| T-19 | Offline capture queue + sync (idempotency key) — server side done in T-04 (`idempotency_keys`, 409/422); typed client now sends a key on all four mutations (Lane B); device-side queue outstanding | A | doing | T-04 |
+| T-19 | Offline capture queue + sync (idempotency key) — server side T-04; device-side queue, replay and status strip done 2026-10-29 (`netra/ui/src/lib/offline/`) | A+B | done | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
 | T-21 | Deploy to Fly.io (volume for SQLite) | A | doing | T-18 |
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |
 | T-23 | Rehearse 3-min demo on deployed URL; recorded fallback | all | todo | T-21 |
 | T-24 | **Hard stop** (Fri 12:00) | all | todo | — |
+
+## Demo
+`demo/RUNBOOK.md` — the 3-minute path, the exact commands, what to say, a
+troubleshooting table and three fallbacks. **Re-seed with
+`scripts/seed_dev.py --force` before every run**: rehearsals and the test
+suites append to the ledger, so `site-07` drifts off the runbook's table. The
+reset is safe with the API running.
 
 ## T-18 — what the integration checkpoint actually proved (2026-10-29)
 Backend + front end run together; the model is still simulated behind ONE seam.
@@ -71,6 +78,33 @@ Fly volume attaches to one and SQLite has one writer. `NETRA_DB` **and**
 entry fails verify with `unknown signer_kid`. The image installs the eleven
 packages the API imports at `requirements.txt`'s pins rather than the whole
 file — torch is not in it and `netra/models` is not copied.
+
+## T-19 — device-side offline queue (done 2026-10-29)
+`netra/ui/src/lib/offline/`. Capture with no signal, queue on the device,
+replay on reconnect. No new endpoint: it runs entirely on T-04's
+`idempotency_keys`.
+- **The key is minted at enqueue, once**, and reused on every delivery. That is
+  the whole design: a replayed `contact_attempted` carrying a fresh key would
+  increment `attempt_n` again and read as two real attempts to reach a patient.
+- Every mutation is written to the queue BEFORE it is sent, even when online —
+  one code path, so the first attempt and the retry cannot disagree about the
+  key, and a new capture cannot overtake an older unsent one.
+- **409 is a RETRY, not a drop.** The server returns it while that key is in
+  flight, i.e. the request is being applied. 422 and the other 4xx are drops,
+  kept in a `failed` list and shown, because a silently dropped capture is the
+  worst outcome available.
+- The drain STOPS at the first retryable entry rather than skipping it. 36
+  tests, plus two live ones against the running API.
+
+## T-21 — deploy prep: one real bug found without Docker
+Docker CLI 29.7.2 is installed on this machine but **no daemon is reachable**,
+so the image has still never been built. Static checks caught the first
+failure anyway: the image ships `scripts/seed_dev.py`, which seeds through
+`fastapi.testclient`, and `starlette.testclient` raises on import without
+`httpx`/`httpx2` — both only EXTRAS of starlette and fastapi. `fly ssh console
+-C "python scripts/seed_dev.py"` would have died on an import inside a
+container. Fixed; `httpx==0.28.1` was already pinned in `requirements.txt`.
+`fly.toml`'s `app` and `primary_region` are marked **SET THIS BEFORE LAUNCH**.
 
 ## Lane C — what the one Kaggle run has to do (T-08 + T-09)
 `python scripts/package_for_kaggle.py` → upload `kaggle_payload.zip` as a Kaggle

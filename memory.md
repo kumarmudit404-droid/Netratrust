@@ -1463,3 +1463,72 @@ then the **test** split, once, and only then.
   quality gate is still SIMULATED; nothing here loads a Lane C artifact.
   `scripts/gen_device_key.py` carries one pre-existing `ruff` I001 finding, left
   untouched as it predates this session.
+
+### 2026-10-29 — Lane A + Lane B — seed idempotency, deploy de-risk, T-19 device queue, demo runbook
+- what changed: second autonomous session of the day, still Lane A + Lane B by
+  instruction while Lane C re-trains. `netra/models/`, `netra/eval/` and
+  `config/thresholds.yaml` untouched; Lane C's uncommitted `train.py` edit,
+  `train.py.bak` and `notebooks/train_kaggle_FIXED.ipynb` left exactly as found.
+  - **`scripts/seed_dev.py` is idempotent (Phase 1).** It decided on whether the
+    FILE existed, which was wrong in both directions: the API's own `init_db`
+    creates an empty file on first boot, so an unseeded Fly volume looked seeded
+    and the demo would have opened with an empty ledger; and a populated volume
+    got exit 2, so a release command that seeds on boot would fail the deploy.
+    The real hazard underneath: **a doubled chain is a VALID chain** — `verify`
+    returns `ok:true` on it — so nothing downstream would have caught a fork,
+    and the demo would simply have quoted twice the real figures. Now decided on
+    contents: populated+verifies → exit 0 writing nothing; populated+BROKEN →
+    exit 1 touching nothing (`netra.ledger.tamper` breaks the chain on purpose
+    during the demo, and re-seeding over it would destroy the evidence); empty or
+    absent → seed; `--force` → reset.
+  - **`--force` resets IN PLACE** rather than unlinking. Found by walking the
+    runbook: on Windows the unlink fails outright, and on Linux it SUCCEEDS,
+    which is worse — a running uvicorn keeps serving the unlinked inode while
+    the seed fills a new file at the same path, giving two databases at one path
+    with no error anywhere. Emptying the tables keeps the inode, so a running
+    server sees the reset (checked live: head 174 → 124).
+  - **`netra/api/main.py` lifespan now disposes the engine.** It opened one and
+    never released it, so after running the app in-process the file stayed open.
+  - **T-19 device-side queue (Phase 3)** — `netra/ui/src/lib/offline/`
+    (`storage.ts`, `queue.ts`, `sync.ts`, `useDeviceQueue.ts`), wired into
+    `Capture.tsx` and `TopNav.tsx`. No new endpoint; it runs on T-04's
+    `idempotency_keys`. The key is minted at enqueue and reused on every
+    delivery; every mutation is written to the queue before it is sent, even
+    online, so one code path owns the key and a new capture cannot overtake an
+    older unsent one. 409 is a RETRY (the server returns it while that key is in
+    flight, i.e. it IS being applied); 422 and other 4xx are drops kept in a
+    visible `failed` list. The drain stops at the first retryable entry rather
+    than skipping it. TopNav shows the device backlog separately from
+    `GET /v1/queue/depth` — conflating them would be a lie, since the server
+    cannot see the device queue.
+  - **`Dockerfile` gained `httpx==0.28.1` (Phase 2).** The image ships
+    `seed_dev.py`, which seeds through `fastapi.testclient`, and
+    `starlette.testclient` RAISES on import without `httpx`/`httpx2` — both are
+    only EXTRAS of starlette and fastapi, and `httpx2` is in the dev venv solely
+    as a transitive dep of a Lane C package. `fly ssh console -C "python
+    scripts/seed_dev.py"` would have died on an import inside a container.
+  - **`demo/RUNBOOK.md`** — the 3-minute path, exact commands, what to say,
+    troubleshooting, three fallbacks, and the one line that changes when the
+    model lands. Walking it found two more errors of mine: it claimed the
+    Referrals view shows the SEEDED referral (it cannot — no list endpoint in
+    the frozen nine, so the view only tracks this session's responses), and it
+    told the presenter to restore the ledger straight after the tamper demo,
+    which would have deleted the encounter and referral just created on stage.
+- verified: `pytest -q` **449 passed**; `npm run build` green; `npm test`
+  **169 passed**; live suite **13/13** against the running API, including a
+  queued capture replaying onto the real ledger at +1 entry and one queued entry
+  delivered twice being deduped by the real server with no second entry. The §5
+  terminal-only fallback was run verbatim and prints what the runbook says.
+  With the chain deliberately broken at seq 60, `metrics/sites`, site status, a
+  new encounter and a new referral all still answer — which is what the runbook
+  now relies on.
+- unverified / TBD: **the image has still never been built.** Docker CLI 29.7.2
+  is installed but no daemon is reachable on either context (`desktop-linux`,
+  `default`), so Phase 2 was static-only and said so. **Still no browser/DOM
+  pass** — the Chrome extension reports "not connected", the third session in a
+  row; the offline queue's React wiring (`useDeviceQueue`, the TopNav badges,
+  Capture's "Saved on this device" panel) is therefore **type-checked and
+  unit-tested but never seen rendering. TBD — verify before the demo.** The
+  queue's `online`-event and interval triggers are not covered by a test, only
+  the drain they call. `fly.toml`'s `app` and `primary_region` remain guesses,
+  now marked. The quality gate is still SIMULATED.
