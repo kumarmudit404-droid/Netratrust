@@ -51,6 +51,14 @@ export default defineConfig({
     // responder. Without this the client's USE_MOCK branch short-circuits
     // every call and a header assertion can never fail.
     env: { VITE_USE_MOCK: "0" },
+    // The default 5000ms is a COLD-CACHE trap, not a generous budget.
+    // `routes.smoke.test.ts` dynamically imports Sites, which pulls in
+    // Recharts; transforming that graph for the first time takes ~7s on this
+    // machine and ~1s once Vite's cache is warm. With the default the suite
+    // therefore passes locally and fails on a fresh clone or in CI, which is
+    // the worst possible failure mode for a pre-commit gate. Raised so the
+    // result depends on the code and not on whether node_modules/.vite exists.
+    testTimeout: 30_000,
   },
   server: {
     port: 5173,
