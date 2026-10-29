@@ -335,3 +335,140 @@ def test_an_unlisted_origin_is_not_allowed(client):
         },
     )
     assert "access-control-allow-origin" not in res.headers
+
+
+# ------------------------------------------------------- device registration
+
+
+#: Two sites that have NO pre-registered device. `conftest.registered` gives
+#: TEST_SITE one, so TEST_SITE never auto-registers and cannot collide - which
+#: is exactly why the bug below survived every earlier test.
+BARE_SITE_A = "site-98"
+BARE_SITE_B = "site-99"
+
+
+@pytest.fixture
+def bare_sites(client, engine):
+    """Two deviceless sites, so both auto-register on their first encounter."""
+    from netra.db.models import Site
+
+    with Session(engine) as session:
+        for site_id in (BARE_SITE_A, BARE_SITE_B):
+            session.add(
+                Site(
+                    id=site_id,
+                    name=f"Camp {site_id}",
+                    region="test",
+                    created_at=now_iso(),
+                )
+            )
+        session.commit()
+    return client
+
+
+def test_two_deviceless_sites_can_both_post(bare_sites):
+    """Regression: the second one used to be a 500 on a valid request.
+
+    With no `X-Device-Kid` header the handler auto-registers a device for the
+    site. The default kid was the fixed string `device-1`, so the second site
+    to auto-register tried to INSERT a primary key the first already held and
+    SQLite raised `UNIQUE constraint failed: devices.kid`.
+
+    This surfaced in `scripts/seed_dev.py`, which is the first thing in the
+    repo to write more than one site.
+    """
+    first = bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_A),
+        headers={"Idempotency-Key": "s1"},
+    )
+    assert first.status_code == 200, first.text
+
+    second = bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_B),
+        headers={"Idempotency-Key": "s2"},
+    )
+    assert second.status_code == 200, second.text
+
+
+def test_each_site_gets_its_own_auto_registered_device(bare_sites, engine):
+    from netra.db.models import Device
+
+    bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_A),
+        headers={"Idempotency-Key": "s1"},
+    )
+    bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_B),
+        headers={"Idempotency-Key": "s2"},
+    )
+
+    with Session(engine) as session:
+        devices = session.exec(select(Device)).all()
+    by_site = {d.site_id: d.kid for d in devices}
+
+    # A device belongs to exactly one site, so the two must differ.
+    assert by_site[BARE_SITE_A] != by_site[BARE_SITE_B]
+    assert len({d.kid for d in devices}) == len(devices)
+
+
+def test_a_sites_second_encounter_reuses_its_device(bare_sites, engine):
+    from netra.db.models import Device
+
+    for i, key in enumerate(("a", "b", "c"), start=1):
+        res = bare_sites.post(
+            "/v1/encounters",
+            json=body(site_id=BARE_SITE_A, device_seq=i),
+            headers={"Idempotency-Key": key},
+        )
+        assert res.status_code == 200, res.text
+
+    with Session(engine) as session:
+        kids = session.exec(
+            select(Device.kid).where(Device.site_id == BARE_SITE_A)
+        ).all()
+    assert len(kids) == 1
+
+
+def test_a_kid_registered_to_another_site_is_a_422(bare_sites, engine):
+    from netra.db.models import Device
+
+    bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_A),
+        headers={"Idempotency-Key": "s1"},
+    )
+    with Session(engine) as session:
+        kid = session.exec(
+            select(Device.kid).where(Device.site_id == BARE_SITE_A)
+        ).first()
+
+    res = bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_B),
+        headers={"Idempotency-Key": "s2", "X-Device-Kid": kid},
+    )
+    assert res.status_code == 422, res.text
+    assert BARE_SITE_A in res.json()["detail"]
+
+
+def test_a_multi_site_chain_still_verifies(bare_sites, engine):
+    """Entries signed by two different devices must still form one valid chain."""
+    bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_A),
+        headers={"Idempotency-Key": "s1"},
+    )
+    bare_sites.post(
+        "/v1/encounters",
+        json=body(site_id=BARE_SITE_B),
+        headers={"Idempotency-Key": "s2"},
+    )
+
+    with Session(engine) as session:
+        result = verify(session)
+    assert result.ok, result.reason
+    assert result.checked == 2

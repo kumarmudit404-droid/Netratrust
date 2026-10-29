@@ -30,7 +30,13 @@ from netra.ledger.keys import KeyStore
 router = APIRouter()
 
 ENDPOINT = "POST /v1/encounters"
-DEFAULT_DEVICE_KID = "device-1"
+#: Auto-registered devices are `device-1`, `device-2`, ... in first-seen order.
+AUTO_DEVICE_PREFIX = "device-"
+
+#: Upper bound on auto-registration, so the search for a free kid is bounded.
+#: Auto-registration is a known gap (see `_resolve_device`), not a feature to
+#: scale: a real deployment enrols devices explicitly.
+MAX_AUTO_DEVICES = 1000
 
 
 def _resolve_device(
@@ -62,7 +68,7 @@ def _resolve_device(
         ).first()
         if existing is not None:
             return existing
-        kid = DEFAULT_DEVICE_KID
+        kid = _free_default_kid(session)
 
     device = Device(
         kid=kid,
@@ -73,6 +79,30 @@ def _resolve_device(
     session.add(device)
     session.flush()
     return device
+
+
+def _free_default_kid(session: Session) -> str:
+    """The first unused `device-N`, for a site that has no device yet.
+
+    A single fixed default is not enough once there is more than one site.
+    `kid` is the primary key of `devices` and a device belongs to exactly one
+    site, so the SECOND site to post an encounter with no `X-Device-Kid` header
+    used to collide on `device-1` and fail the INSERT - a 500 on a request that
+    is entirely valid. Every test before this one used a single site, which is
+    why it stood: `tests/test_encounters.py` now covers two.
+
+    Numbering is per database, not per site, because the kid identifies a
+    device and a device is not shared between sites.
+    """
+    for n in range(1, MAX_AUTO_DEVICES + 1):
+        kid = f"{AUTO_DEVICE_PREFIX}{n}"
+        if session.get(Device, kid) is None:
+            return kid
+    raise HTTPException(
+        507,
+        f"no free auto-registered device kid below {MAX_AUTO_DEVICES}; "
+        f"send an explicit X-Device-Kid header",
+    )
 
 
 @router.post("/v1/encounters", response_model=EncounterResponse)
