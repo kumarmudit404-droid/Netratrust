@@ -1,0 +1,72 @@
+# NetraTrust on Fly.io (T-21).
+#
+#   fly launch --no-deploy --copy-config    # once, to create the app
+#   fly volumes create netra_data --size 1 --region bom
+#   fly deploy
+#
+# ONE MACHINE, ON PURPOSE
+# -----------------------
+# The ledger is a SQLite file on a Fly volume. A volume attaches to exactly one
+# machine, and SQLite has a single writer. Two machines would each hold their
+# own copy of the chain and the two would diverge without either reporting an
+# error - `GET /v1/ledger/verify` would pass on both, which is the worst way to
+# be wrong. So: one machine, never stopped, no autoscaling.
+#
+# WHAT IS ON THE VOLUME
+# ---------------------
+# Both the database AND the device keystore. The database could in principle be
+# re-seeded; the Ed25519 private keys cannot. Lose them and every entry already
+# in the chain fails verification with `unknown signer_kid` - the demo's one
+# claim, broken permanently. Both paths live under /data for that reason, and
+# `tests/test_deploy.py` fails if either moves outside it.
+
+app = "netratrust"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Inside the mount. Not /app, which is replaced on every deploy.
+  NETRA_DB = "/data/netra.db"
+  NETRA_KEYS_DIR = "/data/keys"
+  # The SPA is served by the app itself; see the Dockerfile header.
+  NETRA_UI_DIR = "/app/netra/ui/dist"
+  # Same-origin in the deployed build, so no browser origin needs allowing.
+  # Add one here only to point a separate front end at this API.
+  NETRA_CORS_ORIGINS = ""
+
+[[mounts]]
+  source = "netra_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Never scale to zero: a cold start on stage is a dead three-minute demo, and
+  # the volume pins us to one machine anyway.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    # One SQLite writer. Queue rather than pile up.
+    soft_limit = 20
+    hard_limit = 40
+
+[[http_service.checks]]
+  # Verifying the whole chain is the honest health check: it proves the volume
+  # is mounted, the database opens, the keystore is readable and the signatures
+  # still check. A bare `/` would only prove uvicorn is up.
+  grace_period = "10s"
+  interval = "30s"
+  method = "get"
+  path = "/v1/ledger/verify"
+  timeout = "5s"
+
+[[vm]]
+  # The chain walk is CPU-light but reads every entry; 512 MB leaves room for
+  # numpy/scipy, which the Wilson interval pulls in.
+  size = "shared-cpu-1x"
+  memory = "512mb"

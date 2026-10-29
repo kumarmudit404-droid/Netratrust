@@ -18,10 +18,13 @@ from __future__ import annotations
 
 import inspect
 import os
+import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import PlainTextResponse
+from starlette.staticfiles import StaticFiles
 
 from netra.api.deps import AppState
 from netra.api.routes import encounters, ledger, referrals, sites
@@ -44,6 +47,14 @@ ALLOWED_HEADERS = ("Content-Type", "Idempotency-Key", "X-Device-Kid")
 #: request. A response header is invisible to JS across origins unless exposed.
 EXPOSED_HEADERS = ("Idempotency-Replayed",)
 
+#: Set to the compiled front end (`netra/ui/dist`) to serve it from this app at
+#: `/`. UNSET BY DEFAULT: with no value the app is exactly the frozen nine, so
+#: local dev keeps the Vite dev server on :5173 and nothing changes. The
+#: deployed container sets it, because a single Fly machine with one SQLite
+#: volume is simpler than a second service, and `BrowserRouter` needs an
+#: index.html fallback that Fly's `[[statics]]` cannot give it.
+UI_DIR_ENV = "NETRA_UI_DIR"
+
 
 def cors_origins() -> list[str]:
     """Dev origins plus anything in `NETRA_CORS_ORIGINS` (comma-separated)."""
@@ -60,6 +71,75 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.netra = None
+
+
+class SpaFiles:
+    """The compiled SPA with a real index.html fallback - but never for `/v1`.
+
+    Two things this does that a plain `StaticFiles` mount does not.
+
+    **It falls back to index.html.** `StaticFiles(html=True)` does NOT do SPA
+    fallback - for a path it cannot find it looks for `404.html` and 404s when
+    that is missing too. The front end uses `BrowserRouter`, so `/sites` exists
+    only in the browser: a hard refresh asks this server for a file that was
+    never built, and the SPA shell is the correct answer. Relying on `html=True`
+    for this would 404 a presenter who reloads mid-demo.
+
+    **It does not answer for `/v1`.** The same fallback applied to `/v1/typo`
+    would return 200 and a page of HTML, so a client with a misspelled path
+    would see a success and have to read the body to discover it was wrong.
+    A `/v1/{path:path}` catch-all would be the obvious fix and is not allowed:
+    `tests/test_sites.py` pins the registered `/v1` routes at exactly the nine
+    in SPEC.md, and that test is right. This is an ASGI wrapper, not a route,
+    so the frozen contract is untouched.
+    """
+
+    def __init__(self, directory: str) -> None:
+        self._root = pathlib.Path(directory).resolve()
+        self._files = StaticFiles(directory=directory, html=True)
+
+    def _is_built_file(self, path: str) -> bool:
+        """Whether this path names a file that the UI build actually produced.
+
+        A traversal attempt resolves outside the root, so it is not a built
+        file and falls through to the shell rather than reaching the
+        filesystem. `StaticFiles` checks this again on the way out.
+        """
+        try:
+            candidate = (self._root / path.lstrip("/")).resolve()
+        except (OSError, ValueError):
+            return False
+        if not candidate.is_relative_to(self._root):
+            return False
+        return candidate.is_file()
+
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "")
+        if path == "/v1" or path.startswith("/v1/"):
+            response = PlainTextResponse("no such endpoint", status_code=404)
+            await response(scope, receive, send)
+            return
+        if not self._is_built_file(path):
+            # A client-side route. Serve the shell and let the router read the
+            # URL. 200 is correct: the page exists, just not as a file.
+            scope = {**scope, "path": "/index.html"}
+        await self._files(scope, receive, send)
+
+
+def mount_ui(app: FastAPI) -> bool:
+    """Mount the compiled front end if `NETRA_UI_DIR` names a real directory.
+
+    Returns whether it mounted. A missing directory is not an error: the API is
+    useful on its own and the UI is a separate build step, so an app that
+    refused to start without `dist/` would make the API hostage to the front
+    end.
+    """
+    directory = os.environ.get(UI_DIR_ENV, "").strip()
+    if not directory or not os.path.isdir(directory):
+        return False
+    # Mounted LAST, after the nine, so the routes always win the match.
+    app.mount("/", SpaFiles(directory), name="ui")
+    return True
 
 
 def create_app() -> FastAPI:
@@ -83,6 +163,7 @@ def create_app() -> FastAPI:
     app.include_router(ledger.router)
     app.include_router(sites.router)
     _assert_handlers_are_sync(app)
+    mount_ui(app)
     return app
 
 

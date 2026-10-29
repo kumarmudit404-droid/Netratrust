@@ -1,0 +1,37 @@
+# Keep the build context small and keep secrets and local state out of it.
+
+# --- never ship these ---
+# Ed25519 PRIVATE keys. They belong on the Fly volume, created on first run,
+# never baked into an image that anyone can pull.
+keys/
+.env
+
+# Local ledger. Shipping it would overwrite nothing (the volume wins) but it is
+# local clinical-shaped data and has no business in an image.
+*.db
+netra.db
+
+# --- build output and caches, rebuilt in the image ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+netra/ui/node_modules/
+netra/ui/dist/
+netra/ui/dev-dist/
+netra/ui/*.tsbuildinfo
+
+# --- not needed at runtime ---
+# Lane C's training code and artifacts: the API imports none of it, and the
+# models run on the capture device because images are never uploaded.
+netra/models/
+notebooks/
+data/
+kaggle_payload.zip
+tests/
+.git/
+.github/
+*.md
+*.pdf
+.claude/
