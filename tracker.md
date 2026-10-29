@@ -46,7 +46,14 @@ B (Frontend), C (ML & Evaluation).
 
 ## Demo
 `demo/RUNBOOK.md` — the 3-minute path, the exact commands, what to say, a
-troubleshooting table and three fallbacks. **Re-seed with
+troubleshooting table and three fallbacks.
+`demo/MODEL_LANDING.md` — the mechanical checklist for when T-08/T-09's
+artifacts arrive: drop → fit_thresholds (**calib split only**) → conformalize →
+verify → swap the one UI seam → re-run all gates. Checklist only; nothing in it
+has been run, because no artifact exists. It stops being mechanical at the swap
+itself: `infer.py` is Python and the gate runs on-device, so the real
+implementation is in-browser ONNX/WASM or a local sidecar, and **neither is
+built**. **Re-seed with
 `scripts/seed_dev.py --force` before every run**: rehearsals and the test
 suites append to the ledger, so `site-07` drifts off the runbook's table. The
 reset is safe with the API running.
