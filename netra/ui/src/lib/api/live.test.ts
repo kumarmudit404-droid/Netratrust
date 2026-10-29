@@ -22,6 +22,7 @@
 
 import { describe, expect, it } from "vitest"
 import { api } from "./client"
+import { callQualityGate } from "@/lib/qualityGate"
 
 // Read through `import.meta.env`, not `process.env`: tsconfig.app.json sets
 // `types: ["vite/client"]`, so `process` is not declared and `npm run build`
@@ -171,6 +172,63 @@ describe.skipIf(!LIVE)("live Lane A API", () => {
     expect(Object.keys(res.gradability).sort()).toEqual(["ci", "k", "n"])
     // Non-nullable string; "unpinned" until an audit passes.
     expect(typeof res.model_version).toBe("string")
+  })
+
+  // --------------------------------------------- the whole path, in one test
+
+  it("the full capture path: gate -> encounter -> ledger -> referral -> advance", async () => {
+    // T-18. Everything else in this file tests one endpoint. This walks the
+    // path the operator walks, through the same seam the real model will plug
+    // into, so the integration checkpoint is a test and not a transcript.
+    const before = await api.ledgerCheckpoint()
+
+    // 1. Capture. The gate hashes on-device; the bytes never leave.
+    const gate = await callQualityGate(
+      new File([`live-${run}`], "fundus.png", { type: "image/png" }),
+      { simScenarioKey: "usable-referable" },
+    )
+    expect(gate.qualityVerdict).toBe("usable")
+    expect(gate.grade).toBe(3)
+
+    // 2. Record it. The ledger entry is appended BEFORE this returns.
+    const enc = await api.createEncounter({
+      image_sha256: gate.imageSha256,
+      gate_verdict: gate.qualityVerdict!,
+      cause: gate.cause,
+      prediction_set: gate.predictionSet,
+      model_version: gate.modelVersion,
+      site_id: SITE,
+      device_seq: 9100,
+    })
+    expect(enc.ledger_idx).toBe(before.idx + 1)
+
+    // 3. The chain still verifies with the new entry in it.
+    expect((await api.verifyLedger()).ok).toBe(true)
+
+    // 4. A referable grade can be referred, and the referral advances.
+    const ref = await api.createReferral(enc.encounter_id)
+    expect(ref.state).toBe("issued")
+    const attempted = await api.patchReferral(ref.referral_id, {
+      to_state: "contact_attempted",
+      channel: "phone",
+      reason: null,
+    })
+    expect(attempted.state).toBe("contact_attempted")
+
+    // 5. An illegal jump is refused: issued -> examined skips three states.
+    await expect(
+      api.patchReferral(ref.referral_id, {
+        to_state: "examined",
+        channel: null,
+        reason: null,
+      }),
+    ).rejects.toMatchObject({ status: 409 })
+
+    // 6. The head moved, and every transition above is in it.
+    const after = await api.ledgerCheckpoint()
+    expect(after.idx).toBeGreaterThan(before.idx)
+    expect(after.head_hash).not.toEqual(before.head_hash)
+    expect((await api.verifyLedger()).ok).toBe(true)
   })
 
   it("GET /v1/queue/depth sends the attempt shape Lane A settled on", async () => {
