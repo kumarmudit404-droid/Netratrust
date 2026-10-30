@@ -25,7 +25,10 @@ def brier(y_true: np.ndarray, y_proba: np.ndarray, labels=None) -> float:
     scikit-learn 1.9.1 raises TypeError on the old `y_prob=` keyword. Coding
     assistants trained on older versions emit it confidently.
     """
-    return float(brier_score_loss(y_true, y_proba, labels=labels))
+    # scikit-learn 1.9.1's brier_score_loss has no `labels=` param (it is
+    # binary and infers the positive class), so it is accepted here for
+    # call-compatibility and not forwarded.
+    return float(brier_score_loss(y_true, y_proba))
 
 
 def nll(y_true: np.ndarray, y_proba: np.ndarray, labels=None) -> float:

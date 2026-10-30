@@ -14,3 +14,8 @@ netra/ui/node_modules/
 netra/ui/dist/
 netra/ui/dev-dist/
 netra/ui/*.tsbuildinfo
+
+# Trained model artifacts (too large for git; env-var only loaders)
+artifacts/
+
+*.bak

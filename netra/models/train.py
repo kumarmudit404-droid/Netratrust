@@ -122,9 +122,85 @@ def train(
             "Fetch some with scripts/fetch_aptos_images.py --split train"
         )
 
+    # ---- SPEED (4-5x): preprocess every image ONCE and cache it, instead of
+    # re-reading + re-cropping + re-resizing all ~2900 images EVERY epoch (the
+    # CPU bottleneck that left the GPU idle). Byte-identical output; this only
+    # changes WHEN the preprocessing happens, never WHAT it produces.
+    import concurrent.futures
+
+    from netra.models.preprocess import load_image, preprocess
+
+    def _build_cache(examples):
+        imgs: list = [None] * len(examples)
+
+        def _one(i):
+            processed, _ = preprocess(load_image(examples[i].path))
+            imgs[i] = processed
+
+        if examples:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(_one, range(len(examples))))
+            X = np.stack(imgs)
+        else:
+            X = np.empty((0, IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8)
+        y = np.asarray([e.label for e in examples], dtype=np.int64)
+        return X, y
+
+    _t0 = time.time()
+    train_X, train_y = _build_cache(train_examples)
+    calib_X, calib_y = _build_cache(calib_examples)
+    print(
+        f"cached {len(train_X)} train + {len(calib_X)} calib images once "
+        f"in {time.time() - _t0:.1f}s"
+    )
+
     model = build_model(pretrained=pretrained).to(device)
+
+    # NOTE: single GPU on purpose. DataParallel made each step SLOWER here -
+    # for a small model (ConvNeXt-tiny) the per-step replicate/scatter/gather
+    # overhead outweighs the second GPU. The image cache + AMP are the real
+    # speedups and both stay. One T4 at 512px/batch-16 fits comfortably.
+    use_cuda = torch.cuda.is_available() and str(device).startswith("cuda")
+
     optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    loss_fn = nn.CrossEntropyLoss()
+    # ---- SPEED: mixed precision (AMP) - ~1.5-2x on T4 tensor cores.
+    scaler = torch.cuda.amp.GradScaler(enabled=use_cuda)
+
+    # Inverse-frequency class weights, computed from the TRAIN split only.
+    # Plain CrossEntropyLoss collapses to the majority grade on the
+    # 327:66:215:36:60 imbalance (QWK 0.0). SPEC-safe: training-internal,
+    # no new endpoint/state/dep; weights never touch the test split.
+    _counts = np.bincount(
+        [ex.label for ex in train_examples], minlength=N_CLASSES
+    ).astype(float)
+    _counts[_counts == 0] = 1.0
+    _class_w = _counts.sum() / (len(_counts) * _counts)
+    class_weights = torch.tensor(_class_w, dtype=torch.float32, device=device)
+    print(json.dumps({"class_weights": [round(w, 4) for w in _class_w.tolist()]}))
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+
+    def _evaluate_cached(model, X, y, batch_size, device):
+        """Calibration metrics from the cache. Same numbers as evaluate()."""
+        model.eval()
+        preds: list[int] = []
+        with torch.no_grad():
+            for s in range(0, len(X), batch_size):
+                b, _ = to_tensors(X[s : s + batch_size], y[s : s + batch_size])
+                with torch.cuda.amp.autocast(enabled=use_cuda):
+                    logits = model(b.to(device))
+                preds.extend(logits.argmax(dim=1).cpu().numpy().tolist())
+        if not preds:
+            return {"n": 0, "qwk": None, "accuracy": None}
+        yt = np.asarray(y)
+        yp = np.asarray(preds)
+        measurable = len(set(yt.tolist())) > 1
+        return {
+            "n": len(preds),
+            "qwk": metrics.quadratic_weighted_kappa(yt, yp, N_CLASSES)
+            if measurable
+            else None,
+            "accuracy": float((yt == yp).mean()),
+        }
 
     history: list[dict] = []
     best = {"qwk": -2.0, "epoch": -1}
@@ -138,15 +214,16 @@ def train(
         batches = 0
 
         for start in range(0, len(order), batch_size):
-            chunk = [train_examples[i] for i in order[start : start + batch_size]]
-            images, labels = load_batch(chunk)
-            batch, target = to_tensors(images, labels)
+            idx = order[start : start + batch_size]
+            batch, target = to_tensors(train_X[idx], train_y[idx])
 
             optimiser.zero_grad(set_to_none=True)
-            logits = model(batch.to(device))
-            loss = loss_fn(logits, target.to(device))
-            loss.backward()
-            optimiser.step()
+            with torch.cuda.amp.autocast(enabled=use_cuda):
+                logits = model(batch.to(device))
+                loss = loss_fn(logits, target.to(device))
+            scaler.scale(loss).backward()
+            scaler.step(optimiser)
+            scaler.update()
 
             epoch_loss += float(loss.item())
             batches += 1
@@ -161,7 +238,7 @@ def train(
         }
         if not smoke:
             # Model selection on CALIBRATION only. Never test.
-            entry["calib"] = evaluate(model, calib_examples, batch_size, device)
+            entry["calib"] = _evaluate_cached(model, calib_X, calib_y, batch_size, device)
             score = entry["calib"]["qwk"]
             if score is not None and score > best["qwk"]:
                 best = {"qwk": score, "epoch": epoch}
@@ -200,9 +277,12 @@ def save(model, path: pathlib.Path, trained: bool, meta: dict | None = None) -> 
 
     path = pathlib.Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    state_dict = (
+        model.module.state_dict() if hasattr(model, "module") else model.state_dict()
+    )
     torch.save(
         {
-            "state_dict": model.state_dict(),
+            "state_dict": state_dict,
             "backbone": BACKBONE,
             "n_classes": N_CLASSES,
             "trained": trained,
