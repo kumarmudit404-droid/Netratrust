@@ -1596,3 +1596,143 @@ then the **test** split, once, and only then.
   and `primary_region` are still guesses, marked. The quality gate is still
   SIMULATED. One pre-existing ruff I001 in `scripts/gen_device_key.py` (unsorted
   imports) was left alone as out of lane and out of scope.
+
+### 2026-10-30 — All lanes — the landing page, the live model, and the walk that proved it
+
+Three things landed: the landing page became the app's front door, the quality
+gate stopped being simulated, and the nine env-var refusal tests stopped
+depending on the machine they ran on.
+
+**Lane B — `netra/ui/landing-source.html` is now route `/` (52330ff).**
+Ported in four pieces, none of them a redesign:
+
+- `src/vendor/anime.umd.js` — the inlined Anime.js v4.5.0 bundle, byte for
+  byte. Vendored rather than added to `package.json`; `SPEC.md` freezes the
+  dependency set and the timeline is pinned to this build.
+- `src/routes/landingMarkup.html` — the source's `<body>`, byte for byte,
+  injected rather than hand-converted to JSX. It is four `<svg>` blocks and
+  thirty-odd paths of eye anatomy; retyping that as JSX is a silent chance to
+  change an SVG that no test would catch.
+- `src/landing.css` — the `<style>` block with its SELECTORS scoped and
+  nothing else touched. The four stacked theme layers that build up the final
+  porcelain-and-slate look are still in source order; they override each other
+  on purpose and must not be "cleaned up".
+- `src/lib/landing/eye.ts` — the inline script as `mountEye(root) -> destroy()`.
+
+**Two things the port got wrong before a test caught them.** First, the
+generated CSS emitted `.landing :root { --W: 92vw }` for the mobile width.
+`:root` is `<html>` and can never be a descendant of `.landing`, so that rule
+could never match and the phone layout would have silently kept the desktop
+width. Second, and worse, the UMD wrapper picks its export branch at runtime:
+under Vite it finds `exports` and takes the **CommonJS** branch, so
+`globalThis.anime` is never set, while a plain browser context falls through
+to the global. The first version of `anime.ts` only checked the global, and
+`npm run build` was perfectly green with a landing page whose eye would never
+have animated. `src/vendor/anime.test.ts` exists for exactly that, and it
+failed on the first run — which is what it was for.
+
+Scoping is load-bearing in both directions: `*`, `main` and `h1, h2` were
+page-level in a document that held nothing else, and would have restyled
+`/capture`, `/grade`, `/sites`, `/ledger` and `/referrals`; Tailwind's
+preflight would have reached back the other way and flattened the landing's
+headings. `html`/`body` cannot nest, so they key off a `.landing-active` class
+the route adds and removes.
+
+The teardown is the real work. The source was an IIFE that ran until the tab
+closed; a route unmounts. Every listener goes through one tracker, both
+`setTimeout` chains and the occasional double-blink are tracked, the pointer
+RAF is cancelled, and the scroll timeline is reverted — that last one is what
+detaches the observer Anime.js attached outside our bookkeeping. Lookups are
+scoped to the route element, so StrictMode's double mount in dev is itself the
+leak test.
+
+**Lane A + C — the gate is live, via a sidecar (b47e67b).**
+`MODEL_LANDING.md` §5 left one real decision and this is the sidecar half of
+it, because the image must never leave the device and the nine `/v1` endpoints
+are frozen with none of them grading an image.
+
+`netra/sidecar/` is a SEPARATE PROCESS, not a tenth endpoint: `GET /health`,
+`POST /gate`, bound to `127.0.0.1` only, refusing a non-loopback `Origin`. It
+uses `http.server` rather than FastAPI deliberately — CLAUDE.md asks for stdlib
+over a dependency, and a sidecar that imported `netra.api` would be one
+refactor away from becoming the endpoint the design exists to avoid. The image
+arrives as a raw body, goes to a temp file because `InferenceEngine.run` takes
+a path, and is unlinked in a `finally` including when inference raises.
+
+`--calibrate` is opt-in and OFF by default. Without it `infer.py` abstains and
+says why rather than reporting an argmax; with it the sidecar conformalizes on
+the CALIBRATION split and nothing else. Keeping it off by default keeps a
+methodology decision out of a startup flag — evaluation drift is the risk
+`tracker.md` says no hook catches.
+
+The seam (`qualityGate.ts`) now calls that sidecar. Three things it does NOT
+do, each of which would have been the easy version:
+
+- it does not swallow a broken invariant into the fallback — `assertGateResult`
+  still throws, and it is now guarding a real model that can be wrong;
+- it does not substitute a simulated verdict for a sidecar that answered and
+  could not grade. That is "the gate did not run", which is a real answer;
+- it does not trust the hash. Device and sidecar hash the same bytes, so a
+  mismatch means the hash heading for the ledger is not the image that was
+  graded, and that throws.
+
+An unreachable sidecar falls back to the labelled simulation — a demo must
+never hard-fail — and `Capture.tsx` says so on screen where the scenario
+picker used to be.
+
+**Lane C tests — the refusal tests were asking the machine, not the argument
+(4d2ebcc).** With `NETRA_DR_CHECKPOINT` and `NETRA_QUICKQUAL_SVM` exported,
+`pytest -q` went 9 failed / 448 passed. `DRClassifier(checkpoint=None)` and
+`QualityGate(head=None)` both fall back to `os.environ`, so nine tests that
+construct a loader with nothing and assert it refuses found a real model
+instead and the refusal never happened. A `no_model_artifacts` fixture does
+`monkeypatch.delenv` on both for those nine. The models are unchanged.
+
+**The walk, against the live stack.** API + calibrated sidecar + Vite, walked
+end to end over HTTP with the real artifacts loaded
+(`model_version quickqual:densenet121...@512|convnext_tiny.in12k_ft_in1k@512:convnext_tiny_aptos`,
+not `unloaded`, not `:untrained`):
+
+- a good fundus image → `usable`, quality **997/1000**, prediction set `[0]`,
+  grade 0, `abstain: false` — a real set, not an abstention;
+- a deliberately blurred copy → **`reject`, cause `focus`, `prediction_set:
+  null`, `grade: null`, `abstain: false`**, score 29/1000. The clinical
+  invariant, on the real model;
+- `POST /v1/encounters` with a reject carrying a set → **422**, so the server
+  enforces it too;
+- encounter recorded, ledger advanced by exactly one, `verify ok:true`;
+- **the referral path found a real finding.** The good image graded 0, so the
+  API refused a referral for it: *"encounter is not referable"*. Correct, and
+  it meant the referral walk needed an encounter the MODEL graded referable,
+  not a grade hand-written into the request. Gating a second calibration image
+  gave `borderline` / set `[2]` / grade 2, and that walked
+  `issued → contact_attempted → contacted → appointment_offered → examined`,
+  with a transition out of the terminal state refused 409;
+- `GET /v1/metrics/sites` returned four rows, each with a Wilson interval,
+  `site-12` at n=12 below the n<30 line and `site-21` drift-flagged;
+- the tamper demo broke the chain at **exactly index 60** (`ok:false,
+  first_bad_index: 60`) through the real API, and the database was restored
+  from a backup afterwards — back to idx 135, `ok:true`.
+
+**Not verified: the browser.** The Chrome extension disconnected partway
+through and did not come back across three attempts, so `demo/netratrust_live_demo.gif`
+was NOT produced and the in-browser console check for leaked listeners was not
+run. The landing page rendering at `/` and client-side navigation to
+`/capture` with the picker gone WERE seen on screen before the extension
+dropped. The teardown is covered statically by `eye.port.test.ts`; that is
+weaker than running it, and the live check is still owed.
+
+**The sidecar got its own tests** (`tests/test_sidecar.py`, 26) — it had none
+when it was written, which CLAUDE.md's "write the test with the code" does not
+allow. They assert refusals and cleanup rather than verdicts: loopback-only,
+the `Origin` allowlist (`localhost.evil.com` is the one that looks local and
+is not), the temp image unlinked in a `finally` even when inference raises,
+400/413/422/404 over a real socket, and that conformalisation can only name
+`calib`. One of them was flaky at first — a raw-socket 413 test that sent part
+of a 32 MB body and raced the server's close. Fixed by sending NO body at all,
+which is also the better assertion: the cap is read off `Content-Length`, so
+nothing should need to be transferred.
+
+**Gates:** `pytest -q` 483 passed with both env vars exported (the deployed
+config) and 483 passed without them; `npm run build` green; `npm test` 207
+passed, 13 skipped. Run as four separate commands.

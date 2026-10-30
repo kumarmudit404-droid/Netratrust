@@ -26,9 +26,9 @@ B (Frontend), C (ML & Evaluation).
 | T-05 | `POST /v1/referrals` + `PATCH /v1/referrals/{id}` state machine | A | done | T-03 |
 | T-06 | `GET /v1/ledger/verify` + `/checkpoint` | A | done | T-03 |
 | T-07 | Site status, metrics, queue-depth endpoints | A | done | T-02 |
-| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | doing | UNBLOCKED: EyeQ publishes labels, not pixels, and EyePACS is MOUNTED on Kaggle. `netra/models/eyeq.py` + section 7 of `notebooks/train_kaggle.ipynb` fit the real head. **Needs the GPU run** |
-| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | doing | `notebooks/train_kaggle.ipynb` + `kaggle_payload.zip` ready and driven end to end against a simulated mount. **Needs the GPU run** |
-| T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | done | tested on synthetic probabilities; conformalise on real ones after T-09 |
+| T-08 | Fit quality gate (QuickQual) on EyeQ; pickle load test | C | done | `artifacts/quality_head_eyeq.pkl` landed and loads. Real verdicts: 997/1000 usable on a good image, 29/1000 reject (`focus`) on a blurred one |
+| T-09 | Train DR backbone `convnext_tiny` @512px on Kaggle T4 | C | done | `artifacts/convnext_tiny_aptos.pt` landed, QWK 0.886 (inside SPEC §2's 0.88-0.92; >0.95 would mean a leaked split). `model_version` is real - not `unloaded`, not `:untrained` |
+| T-10 | Conformal wrap (MAPIE SplitConformalClassifier) + abstain logic | C | done | now conformalised on REAL probabilities, calibration split only, via `netra.sidecar --calibrate`. Verified sets: `[0]` do-not-refer, `[2]` refer |
 | T-11 | Fit thresholds on **calibration split only**; write `thresholds.yaml` | C | doing | fitter built + run; it REFUSED to write (one-sided scores). Placeholders stand — see memory.md |
 | T-12 | Unit-test remaining metrics functions | C | done | T-01 |
 | T-13 | React PWA scaffold + shell: Vite/TS, Tailwind tokens, shadcn/ui, TanStack Query, vite-plugin-pwa, `<TopNav/>` + five routes, typed API client (mock responder) | B | done | Node (installed) |
@@ -39,9 +39,9 @@ B (Frontend), C (ML & Evaluation).
 | T-18 | **Integration checkpoint** (Wed 18:00) | A+B+C | done | T-04, T-13 |
 | T-19 | Offline capture queue + sync (idempotency key) — server side T-04; device-side queue, replay and status strip done 2026-10-29 (`netra/ui/src/lib/offline/`) | A+B | done | T-04 |
 | T-20 | Grad-CAM overlay (stretch) | C | todo | T-15 |
-| T-21 | Deploy to Fly.io (volume for SQLite) | A | doing | T-18 |
+| T-21 | Deploy to Fly.io (volume for SQLite) | A | doing | T-18. Note: the sidecar is NOT deployed and must not be - it runs on the capture device |
 | T-22 | **Feature freeze** (Thu 21:00) | all | todo | — |
-| T-23 | Rehearse 3-min demo on deployed URL; recorded fallback | all | todo | T-21 |
+| T-23 | Rehearse 3-min demo on deployed URL; recorded fallback | all | doing | path walked end to end against the LOCAL stack (see below). Not yet on the deployed URL, and **no recorded fallback yet** |
 | T-24 | **Hard stop** (Fri 12:00) | all | todo | — |
 
 ## Demo
@@ -138,6 +138,78 @@ typed client: 13/13 against it.
   exists only to stop the other three going vacuous.
 - The image has **still never been built.** Everything above is a real server
   and a real bundle, but not a real container.
+
+## The landing page, the live model, and the walk (2026-10-30)
+
+Three commits: `4d2ebcc` (the env-var test fixture), `52330ff` (the landing
+page as route `/`), `b47e67b` (the live gate via the sidecar).
+
+### The gate is no longer simulated
+`MODEL_LANDING.md` §5 left one real decision — in-browser ONNX/WASM, or a local
+sidecar. **Sidecar**, because the image must never leave the device and the
+nine `/v1` endpoints are frozen with none of them grading an image.
+
+`netra/sidecar/` is a separate local process (`GET /health`, `POST /gate`),
+bound to `127.0.0.1`, refusing a non-loopback `Origin`. Stdlib `http.server`,
+not FastAPI: CLAUDE.md prefers stdlib, and a sidecar importing `netra.api`
+would be one refactor from becoming the tenth endpoint this avoids.
+**It is not deployed and must not be** — `fly.toml` runs the API and the SPA;
+there is no server-side inference anywhere, which is what keeps SPEC.md's
+"the image never leaves the device" true.
+
+`--calibrate` is opt-in and off by default. Without it `infer.py` abstains and
+says why rather than reporting an argmax; with it the sidecar conformalises on
+the **calibration split only**. Off by default on purpose: that is a
+methodology decision, not a startup convenience, and evaluation drift is the
+risk nothing else catches.
+
+### What the walk proved, against the live stack
+Real artifacts loaded, API + calibrated sidecar + Vite running:
+
+| step | result |
+|---|---|
+| good fundus image | `usable`, **997/1000**, set `[0]`, grade 0, not an abstention |
+| blurred copy | **`reject`, `focus`, set `null`, grade `null`**, 29/1000 |
+| reject + set → `POST /v1/encounters` | **422** — the server enforces it too |
+| encounter | accepted, ledger advanced by exactly 1, `verify ok:true` |
+| referral on a grade-0 encounter | **422, "not referable"** — correct refusal |
+| referral on a model-graded `[2]` | `issued → contact_attempted → contacted → appointment_offered → examined`; out of terminal → 409 |
+| `GET /v1/metrics/sites` | 4 rows, Wilson intervals, `site-12` n=12 under the n<30 line, `site-21` drift-flagged |
+| tamper `--seq 60` | `ok:false, first_bad_index: 60`; DB restored from backup afterwards |
+
+The referral step is the one that found something. The real model graded the
+good image **0**, so the API refused a referral for it — correct, and it meant
+the referral walk had to use an encounter the **model** graded referable
+rather than a grade written into the request by hand. A second calibration
+image came back `borderline` / `[2]` / grade 2 and walked the whole machine.
+
+### Still owed
+- **No recorded fallback video.** The Chrome extension disconnected mid-run and
+  did not recover across three attempts, so `demo/netratrust_live_demo.gif` was
+  not produced. T-23 is not closed without it (`demo/RUNBOOK.md` §5 depends on
+  a recording existing on the presenting machine).
+- **The eye's teardown has not been watched in a browser.** It is covered
+  statically by `eye.port.test.ts` (every listener goes through one tracker,
+  every timer handle is cleared, the timelines are reverted), and StrictMode's
+  double mount in dev is the live check — but that check has not been run.
+- The landing page rendering at `/` and client-side nav to `/capture` with the
+  scenario picker gone **were** seen on screen before the extension dropped.
+
+### The sidecar's own tests (`tests/test_sidecar.py`, 26)
+Mostly about what it REFUSES and what it cleans up, because the verdicts are
+`infer.py`'s and are tested there: loopback-only binding (with a source check
+that `0.0.0.0` appears nowhere), the `Origin` allowlist including
+`localhost.evil.com` which looks local and is not, the temp image removed in a
+`finally` **even when inference raises**, 400/413/422/404 over a real socket,
+the sidecar surviving a bad request, the exact nine-field wire shape the UI
+maps, and that conformalisation can only ever name the `calib` split. None of
+them load a real checkpoint — a suite that needs gigabytes of artifacts is a
+suite that fails on a fresh clone.
+
+### Gates (four separate commands)
+`pytest -q` **483 passed** with `NETRA_DR_CHECKPOINT` + `NETRA_QUICKQUAL_SVM`
+exported, and **483 passed** without them — the point of `4d2ebcc`.
+`npm run build` green. `npm test` **207 passed, 13 skipped**.
 
 ## Lane C — what the one Kaggle run has to do (T-08 + T-09)
 `python scripts/package_for_kaggle.py` → upload `kaggle_payload.zip` as a Kaggle
