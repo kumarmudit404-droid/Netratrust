@@ -8,7 +8,7 @@
  * metadata go to POST /v1/encounters.
  */
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, useReducedMotion } from "framer-motion"
 import { Camera, RotateCcw } from "lucide-react"
@@ -16,8 +16,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VerdictPanel } from "@/components/VerdictPanel"
 import { StatusBadge } from "@/components/StatusBadge"
-import { SCENARIOS, type Scenario } from "@/lib/gateSim"
-import { callQualityGate } from "@/lib/qualityGate"
+import {
+  callQualityGate,
+  isSimulatedModelVersion,
+  probeGateSidecar,
+  type GateHealth,
+} from "@/lib/qualityGate"
 import { shortHash } from "@/lib/sha256"
 import { deviceQueue, submitEncounter } from "@/lib/offline/sync"
 import { ApiError } from "@/lib/api/client"
@@ -33,8 +37,11 @@ export default function Capture() {
   const { current, setCurrent, patchCurrent } = useEncounter()
 
   const [hashing, setHashing] = useState(false)
-  const [scenarioKey, setScenarioKey] = useState<string>(SCENARIOS[0].key)
   const [error, setError] = useState<string | null>(null)
+  // The gate sidecar's own health, polled so the screen can say up front
+  // whether the next capture will use the real model or the labelled
+  // fallback - rather than the operator finding out from the verdict note.
+  const [gateHealth, setGateHealth] = useState<GateHealth | null>(null)
   const [deviceSeq, setDeviceSeq] = useState(412)
   const [recording, setRecording] = useState(false)
   // True when this capture is on the device and has not reached the server.
@@ -46,9 +53,10 @@ export default function Capture() {
     setHashing(true)
     try {
       // The ONLY gate call in the front end. It hashes in the browser and the
-      // file object is dropped immediately after; the bytes never leave.
-      // Swapping in the real model is a change to callQualityGate, not here.
-      const gate = await callQualityGate(file, { simScenarioKey: scenarioKey })
+      // file object is dropped immediately after; the bytes never leave. It
+      // calls the real model through the sidecar, and falls back to the
+      // labelled simulation if the sidecar is unreachable - see qualityGate.ts.
+      const gate = await callQualityGate(file)
       if (gate.qualityVerdict === null) {
         // The gate could not run. That is not a verdict, so there is nothing
         // to record — POST /v1/encounters has no nullable gate_verdict.
@@ -117,6 +125,19 @@ export default function Capture() {
     fileRef.current?.click()
   }
 
+  // Polled once on mount, not continuously: an operator who starts the
+  // sidecar mid-session can just retry a capture, and this screen is not
+  // where "is the model loaded" needs to be live-updating.
+  useEffect(() => {
+    let cancelled = false
+    void probeGateSidecar().then((health) => {
+      if (!cancelled) setGateHealth(health)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const isReject = current?.verdict === "reject"
   // A queued capture IS recorded - on this device, with its key, waiting to
   // sync. Treating it as unrecorded would invite the operator to capture the
@@ -179,31 +200,23 @@ export default function Capture() {
               </p>
             )}
 
-            {/* Lane C's on-device gate is not wired up yet. Labelled plainly
-                so no one mistakes this control for a model. */}
-            <fieldset className="rounded-md border border-border-subtle p-3">
-              <legend className="px-1 text-caption font-semibold text-borderline">
-                Simulated gate — Lane C model not wired yet
-              </legend>
-              <label
-                className="mt-1 block text-caption text-text-muted"
-                htmlFor="scenario"
-              >
-                Scenario applied on the next capture
-              </label>
-              <select
-                id="scenario"
-                value={scenarioKey}
-                onChange={(e) => setScenarioKey(e.target.value)}
-                className="mt-1 h-11 w-full rounded-md border border-border-subtle bg-bg px-2 text-body"
-              >
-                {SCENARIOS.map((s: Scenario) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </fieldset>
+            {/* Which gate the NEXT capture will use. Not a control — the
+                real model is used whenever the sidecar answers; this only
+                says, out loud, whether it did. */}
+            {gateHealth && !gateHealth.reachable && (
+              <p className="rounded-md border border-borderline/40 bg-borderline/10 p-3 text-caption text-borderline">
+                Gate sidecar not reachable. The next capture will use a
+                SIMULATED verdict, labelled as such — start the sidecar
+                (<code className="font-mono">python -m netra.sidecar</code>)
+                for a real grade.
+              </p>
+            )}
+            {gateHealth?.reachable && !gateHealth.classifierLoaded && (
+              <p className="rounded-md border border-borderline/40 bg-borderline/10 p-3 text-caption text-borderline">
+                Gate sidecar is running, but no DR checkpoint is loaded. The
+                quality verdict will be real; the grade will not.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -217,6 +230,12 @@ export default function Capture() {
             </Card>
           ) : (
             <>
+              {isSimulatedModelVersion(current.modelVersion) && (
+                <p className="rounded-md border border-borderline/40 bg-borderline/10 px-3 py-2 text-caption font-semibold text-borderline">
+                  SIMULATED — the gate sidecar was unreachable; this is not a
+                  measurement.
+                </p>
+              )}
               <VerdictPanel
                 verdict={current.verdict}
                 cause={current.cause}

@@ -186,9 +186,12 @@ describe.skipIf(!LIVE)("live Lane A API", () => {
     const before = await api.ledgerCheckpoint()
 
     // 1. Capture. The gate hashes on-device; the bytes never leave.
+    // forceSimulated: this test asserts a specific scenario's grade (3), so
+    // it must not pick up a real sidecar that happens to be running on the
+    // machine the suite runs on - that would make the assertion non-deterministic.
     const gate = await callQualityGate(
       new File([`live-${run}`], "fundus.png", { type: "image/png" }),
-      { simScenarioKey: "usable-referable" },
+      { simScenarioKey: "usable-referable", forceSimulated: true },
     )
     expect(gate.qualityVerdict).toBe("usable")
     expect(gate.grade).toBe(3)
