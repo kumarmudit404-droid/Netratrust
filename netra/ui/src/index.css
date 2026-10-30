@@ -78,6 +78,14 @@
   }
 }
 
+/* The five screening screens' page background, lifted verbatim from the
+   landing's default porcelain gradient (src/landing.css body.landing-active,
+   line 38) so "/" and the screening shell read as one product. Background
+   only: cards still sit on --surface, so text contrast is unaffected. */
+.screening-bg {
+  background: radial-gradient(ellipse at 50% 42%, #fffef5 0%, #fff4d9 38%, #f1e5c7 70%, #e8d9b9 100%) fixed;
+}
+
 /* All motion respects the user's reduced-motion preference (design.md s8). */
 @media (prefers-reduced-motion: reduce) {
   *,

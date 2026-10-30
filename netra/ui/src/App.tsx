@@ -14,11 +14,11 @@ import Ledger from "@/routes/Ledger"
  * It is a layout route now only so that "/" can sit outside it. The landing
  * page is full-bleed, brings its own header (`.atelier`) and its own
  * navigation (the `data-route` buttons), and paints `html`/`body` itself - so
- * TopNav and `bg-bg` would both fight it.
+ * TopNav and `screening-bg` would both fight it.
  */
 function ScreeningChrome() {
   return (
-    <div className="min-h-dvh bg-bg">
+    <div className="min-h-dvh screening-bg">
       <TopNav />
       <main>
         <Outlet />
