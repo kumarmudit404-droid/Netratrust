@@ -180,7 +180,7 @@ def test_cause_for_returns_a_code_lane_b_can_render():
 # ----------------------------------------- the gate with no head available
 
 
-def test_an_unloaded_gate_refuses_to_produce_a_verdict():
+def test_an_unloaded_gate_refuses_to_produce_a_verdict(no_model_artifacts):
     """The single most important assertion in this lane."""
     gate = QualityGate(features=_FakeFeatures(), head=None)
     assert gate.available is False
@@ -196,7 +196,9 @@ def test_an_unloaded_gate_refuses_to_produce_a_verdict():
     assert result.measurements["retina_fraction"] > 0
 
 
-def test_the_meme_fallback_refuses_rather_than_improvising_parameters(monkeypatch):
+def test_the_meme_fallback_refuses_rather_than_improvising_parameters(
+    monkeypatch, no_model_artifacts
+):
     """SPEC.md's Fallback A is 10 published parameters. They are not in this
     repo, and ten invented numbers would look published."""
     monkeypatch.setenv(MEME_ENV, "0.1,0.2,0.3")

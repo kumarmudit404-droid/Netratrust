@@ -81,3 +81,30 @@ def client(tmp_path, monkeypatch, registered):
 
     with TestClient(create_app()) as c:
         yield c
+
+
+# ----------------------------------------------- model artifacts, absent
+
+#: The two env-var-only loader paths. `DRClassifier` and `QualityGate` both
+#: fall back to these when their constructor argument is None, so a developer
+#: (or `fly.toml`'s `[env]`) having them exported silently loads a real model
+#: into a test that asked for an empty one.
+MODEL_ARTIFACT_ENVS = ("NETRA_DR_CHECKPOINT", "NETRA_QUICKQUAL_SVM")
+
+
+@pytest.fixture
+def no_model_artifacts(monkeypatch):
+    """Unset both artifact env vars, so `checkpoint=None` really means none.
+
+    The refusal tests - an unloaded gate must not guess a verdict, an unloaded
+    classifier must raise rather than return a grade - construct their loaders
+    with nothing and assert `model_version == "unloaded"`. That assertion is
+    about the argument, not about the machine the suite runs on, and without
+    this fixture it inverts the moment the artifacts are on disk and exported:
+    the loader finds a real model and the refusal never happens.
+
+    `fly.toml` puts both variables in `[env]`, so the exported case is the
+    deployed case, not a local quirk.
+    """
+    for name in MODEL_ARTIFACT_ENVS:
+        monkeypatch.delenv(name, raising=False)

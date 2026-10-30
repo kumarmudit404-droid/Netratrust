@@ -24,13 +24,15 @@ from tests.test_quality import fundus
 # ----------------------------------------------- refusing to invent a grade
 
 
-def test_an_unloaded_classifier_has_no_model_version():
+def test_an_unloaded_classifier_has_no_model_version(no_model_artifacts):
     clf = DRClassifier(checkpoint=None)
     assert clf.available is False
     assert clf.model_version == dr.UNLOADED
 
 
-def test_an_unloaded_classifier_raises_instead_of_returning_a_grade():
+def test_an_unloaded_classifier_raises_instead_of_returning_a_grade(
+    no_model_artifacts,
+):
     """The single most important assertion here. A grade from random weights is
     indistinguishable from a real one by the time it reaches a referral."""
     clf = DRClassifier(checkpoint=None)

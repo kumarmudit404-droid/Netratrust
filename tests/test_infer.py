@@ -88,7 +88,7 @@ def test_the_result_carries_the_hash_and_never_the_pixels(image_file):
 # ------------------------------------------- 1. the gate head is missing
 
 
-def test_no_gate_head_means_no_verdict_and_no_grade(image_file):
+def test_no_gate_head_means_no_verdict_and_no_grade(image_file, no_model_artifacts):
     engine = InferenceEngine(
         gate=QualityGate(features=_FakeFeatures(), head=None),
         classifier=loaded_classifier(),
@@ -104,7 +104,9 @@ def test_no_gate_head_means_no_verdict_and_no_grade(image_file):
     assert "unavailable" in result.note
 
 
-def test_a_missing_gate_cannot_be_posted_as_an_encounter(image_file):
+def test_a_missing_gate_cannot_be_posted_as_an_encounter(
+    image_file, no_model_artifacts
+):
     """Lane A's gate_verdict is not nullable, so there is nothing to post."""
     engine = InferenceEngine(
         gate=QualityGate(features=_FakeFeatures(), head=None),
@@ -176,7 +178,9 @@ def test_the_encounter_body_validates_against_lane_as_schema(image_file):
 # ---------------------------------------- 3. admitted, no DR checkpoint
 
 
-def test_admitted_but_unloaded_dr_gives_a_verdict_and_no_grade(image_file):
+def test_admitted_but_unloaded_dr_gives_a_verdict_and_no_grade(
+    image_file, no_model_artifacts
+):
     """The gate ran, so its verdict is real and worth recording. The grade is
     absent and model_version says so."""
     engine = InferenceEngine(
@@ -244,7 +248,9 @@ def test_the_full_path_produces_a_prediction_set(image_file):
     assert isinstance(result, InferenceResult)
 
 
-def test_the_model_version_is_unloaded_unless_both_halves_are_real(image_file):
+def test_the_model_version_is_unloaded_unless_both_halves_are_real(
+    image_file, no_model_artifacts
+):
     """Not a partial string: a caller writing this into a ledger needs to know
     the whole pipeline was real, not half of it."""
     gate_only = InferenceEngine(
@@ -282,7 +288,9 @@ def test_a_missing_image_file_raises_rather_than_returning_a_result(tmp_path):
         engine.run(tmp_path / "nope.png")
 
 
-def test_the_cli_reports_unloaded_without_inventing_anything(image_file, capsys):
+def test_the_cli_reports_unloaded_without_inventing_anything(
+    image_file, capsys, no_model_artifacts
+):
     """With nothing on disk the CLI must print an unloaded result, not a grade."""
     import json
 
