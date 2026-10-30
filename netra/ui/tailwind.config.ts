@@ -11,6 +11,7 @@ export default {
         bg: "var(--bg)",
         surface: "var(--surface)",
         text: { DEFAULT: "var(--text)", muted: "var(--text-muted)" },
+        accent: "var(--accent)",
         usable: "var(--usable)",
         borderline: "var(--borderline)",
         reject: "var(--reject)",
@@ -26,6 +27,9 @@ export default {
       },
       fontFamily: {
         sans: ["-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+        // The landing's display serif (src/index.css --font-display), exposed
+        // as a utility for the one spot (TopNav's wordmark) that isn't h1/h2.
+        serif: ["var(--font-display)"],
       },
     },
   },

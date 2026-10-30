@@ -25,9 +25,11 @@ export function TopNav() {
   const device = useDeviceQueue()
 
   return (
-    <header className="border-b border-border-subtle bg-bg">
+    <header className="border-b border-accent/25 bg-bg">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        <span className="text-subhead">NetraTrust</span>
+        <span className="font-serif text-subhead font-semibold tracking-wide text-text">
+          NetraTrust
+        </span>
         <nav aria-label="Main" className="flex flex-wrap gap-1">
           {ROUTES.map((r) => (
             <NavLink
@@ -35,9 +37,9 @@ export function TopNav() {
               to={r.to}
               className={({ isActive }) =>
                 cn(
-                  "rounded-md px-3 py-2 text-body transition-colors",
+                  "rounded-md border-b-2 border-transparent px-3 py-2 text-body transition-colors",
                   isActive
-                    ? "bg-surface font-semibold text-text"
+                    ? "border-accent bg-surface font-semibold text-text"
                     : "text-text-muted hover:bg-surface hover:text-text",
                 )
               }

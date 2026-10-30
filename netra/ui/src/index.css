@@ -2,31 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Colour tokens from design.md section 2. Contrast ratios are measured with the
-   WCAG 2.1 relative-luminance formula, on --bg AND on --surface, because status
-   text sits on cards as often as on the page.
+/* Colour tokens from design.md section 2, re-pointed to the landing page's
+   palette (src/landing.css: --ink #203c50, --muted #425f73, --accent #237970,
+   and its porcelain/ivory background) so the five screening screens read as
+   the same product as "/" instead of stock Tailwind white. Contrast ratios
+   are measured with the WCAG 2.1 relative-luminance formula, on --bg AND on
+   --surface, because status text sits on cards as often as on the page.
                     on --bg   on --surface
-     --text           17.74        16.37
-     --text-muted      7.56         6.98
-     --usable          5.02         4.63
-     --borderline      5.24         4.84
-     --reject          6.57         6.07
-     --abstain         6.46         5.97
-     --border-subtle   1.47         1.36  (decorative - never text)
-   --borderline was #9A6700, which measured 4.49:1 on --surface - under AA. It
-   is used at caption size on cards (the simulated-gate legend, the "grade is
-   provisional" note), so it was darkened to #926300 rather than the rule being
-   restated. Every status token now clears AA at any size on both surfaces. */
+     --text           10.85        10.50
+     --text-muted      6.35         6.14
+     --usable          4.73         4.58
+     --borderline      4.94         4.78
+     --reject          6.19         5.99
+     --abstain         6.09         5.89
+     --border-subtle   1.36         n/a  (decorative - never text)
+   --borderline is #926300 (darkened from #9A6700 for a surface that no
+   longer exists - see the regression note in contrast.test.ts). On the new
+   ivory --surface it still measures 4.44:1, under AA, same as before: the
+   fix stands regardless of --surface's hue, because it only depends on
+   --surface's LIGHTNESS, and --surface was chosen to keep that within 0.0015
+   of the old #f4f6f8's luminance for exactly this reason. Every status token
+   clears AA at any size on both surfaces. */
 :root {
-  --bg: #ffffff;
-  --surface: #f4f6f8;
-  --text: #111827;
-  --text-muted: #4b5563;
+  --bg: #fdf8e9;
+  --surface: #faf4e6;
+  --text: #203c50;
+  --text-muted: #425f73;
+  --accent: #237970;
   --usable: #1b7f4b;
   --borderline: #926300;
   --reject: #b42318;
   --abstain: #5b4bc4;
-  --border-subtle: #d0d5dd;
+  --border-subtle: #e3d6b4;
+  /* The landing's serif stack (src/landing.css .landing h1,h2), for display
+     headings only - system fonts, no network fetch. Hashes/IDs keep the
+     existing font-mono utility untouched. */
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 /* Dark theme: --text holds AAA (16.27:1 on --bg). The light status hues do NOT
@@ -45,6 +56,16 @@
   }
   body {
     @apply bg-bg text-text font-sans text-body antialiased;
+  }
+  /* Display headings pick up the landing's serif face; everything else
+     (body copy, labels, buttons) stays on the sans stack, and hashes/IDs
+     keep font-mono wherever a component already applies it. Specificity:
+     plain element selectors, same as Tailwind's preflight - `.landing h1`
+     in landing.css outranks this (class + descendant beats bare element), so
+     the landing page is untouched. */
+  h1,
+  h2 {
+    font-family: var(--font-display);
   }
   /* Focus is never removed. */
   :focus-visible {
