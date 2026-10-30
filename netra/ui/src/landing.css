@@ -1,0 +1,251 @@
+/**
+ * The landing page's stylesheet, lifted verbatim out of
+ * `netra/ui/landing-source.html` and then SCOPED. Not restyled: every colour,
+ * font, gradient, transition and media query below is the value that file
+ * shipped, in that file's order - the later `:root`/`body` blocks deliberately
+ * override the earlier ones, which is how the porcelain-and-slate theme is
+ * built up, so DO NOT "clean up" the duplicates.
+ *
+ * Scoping is the one change, and it is load-bearing in both directions:
+ *
+ *   - `*`, `main`, `h1, h2` and friends were page-level in a document that
+ *     held nothing else. Here they would reach /capture, /grade, /sites,
+ *     /ledger and /referrals and restyle all five.
+ *   - Tailwind's preflight (`src/index.css`) would otherwise reach back the
+ *     other way and flatten the landing's headings and links. `.landing h1`
+ *     outranks preflight's bare `h1`, so the nesting fixes that too.
+ *
+ * `html` and `body` cannot be nested, so they key off `.landing-active`, a
+ * class `Landing.tsx` puts on both elements while the route is mounted and
+ * removes on unmount.
+ *
+ * `.landing` itself must never get `transform`, `filter`, `perspective`,
+ * `contain` or `will-change`: all of `.stage`, `#labels`, `.hud`, `.cue`,
+ * `.workshop` and `.medical-cross` are `position: fixed`, and any of those
+ * properties on the wrapper would make it their containing block and pull the
+ * whole eye out of place.
+ */
+
+.landing {
+  --ink: #203c50; --muted: #425f73; --accent: #237970;
+  --W: min(62vw, 700px);
+}
+.landing, .landing *, .landing *::before, .landing *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html.landing-active { background: #e8d9b9; }
+body.landing-active {
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  background: radial-gradient(ellipse at 50% 42%, #fffef5 0%, #fff4d9 38%, #f1e5c7 70%, #e8d9b9 100%) fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/* ---------- the 3D stage: the eye is built from stacked layers ---------- */
+.landing .stage {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+  display: grid; place-items: center;
+  perspective: 1500px; perspective-origin: 50% 48%;
+}
+.landing .glow {
+  position: absolute; left: 50%; top: 50%; width: 120vmin; height: 90vmin;
+  margin: -45vmin 0 0 -60vmin; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,255,255,.20), rgba(255,255,255,0));
+}
+.landing .floor {
+  position: absolute; left: 50%; top: calc(50% + 24vmin); width: 62vmin; height: 8vmin;
+  margin-left: -31vmin; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0,0,0,.42), rgba(0,0,0,0));
+}
+
+/* Scroll-driven disintegration particles; this layer never changes the eye geometry. */
+.landing #disintegration {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 2; pointer-events: none;
+}
+.landing .sway, .landing .rig { transform-style: preserve-3d; }
+.landing .sway { width: var(--W); }
+.landing .rig {
+  --K: 1; --gx: 0; --gy: 0; --amp: 0;
+  position: relative; width: var(--W); aspect-ratio: 600 / 420;
+}
+.landing .part { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform; }
+.landing .sl {
+  position: absolute; overflow: visible;
+  /* each slice sits at its own depth (--z); the iris and pupil slide with the gaze (--gx/--gy) */
+  transform:
+    translateZ(calc(var(--z) * var(--K) * 1px))
+    translate(calc(var(--gx) * var(--gk) * var(--K) * 1px), calc(var(--gy) * var(--gk) * var(--K) * 1px));
+}
+.landing .rig.float .sl { animation: fl var(--fd, 5s) ease-in-out var(--fdl, 0s) infinite; }
+@keyframes fl { 0%, 100% { translate: 0 0; } 50% { translate: 0 calc(var(--amp) * var(--K) * 1px); } }
+.landing .p { transform-box: fill-box; transform-origin: 50% 50%; }
+.landing #lidfill-up { transform-origin: 50% 0%; }
+.landing #lidfill-low { transform-origin: 50% 100%; }
+.landing .lb { transform-box: view-box; transform-origin: 300px 216px; }
+.landing .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+
+/* ---------- page copy (left side; the anatomy list lives on the right) ---------- */
+.landing #track { position: relative; z-index: 2; }
+.landing .s { min-height: 100vh; padding: 0 6vw; display: flex; align-items: center; }
+.landing .copy {
+  max-width: 26ch; padding: 1.3rem 1.5rem 1.4rem; border-radius: 16px;
+  background: rgba(255,255,255,.78); text-shadow: none;
+}
+.landing .kicker {
+  font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.1rem;
+}
+.landing h1, .landing h2 { font-weight: 500; letter-spacing: -.02em; line-height: 1.04; font-size: clamp(1.9rem, 3.8vw, 3.3rem); }
+.landing h1 em, .landing h2 em { color: var(--accent); font-style: italic; }
+.landing .copy p.body { margin-top: 1.1rem; color: var(--muted); font-size: 1.02rem; line-height: 1.55; }
+.landing .foot { margin-top: 1.6rem; font: 11px ui-monospace, Menlo, monospace; letter-spacing: .14em; color: #526e80; text-transform: uppercase; }
+
+
+/* ---------- anatomy labels: the structure that is separating lights up ---------- */
+.landing #labels {
+  position: fixed; z-index: 4; top: 50%; right: clamp(14px, 3vw, 42px);
+  transform: translateY(-50%); width: min(235px, 27vw);
+  padding: 16px 15px; border: 1px solid rgba(18,107,145,.22); border-radius: 12px;
+  background: rgba(255,255,255,.84); backdrop-filter: blur(12px);
+  color: #203c50; font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em;
+  opacity: 0; pointer-events: none; transition: opacity .35s ease;
+}
+.landing #labels.visible { opacity: 1; }
+.landing .labels-kicker { color: var(--accent); font-size: 9px; letter-spacing: .18em; margin-bottom: 10px; }
+.landing .lab { padding: 4px 7px; margin: 2px 0; border-left: 2px solid transparent; color: #526e80; transition: all .2s ease; }
+.landing .lab.done { color: #425f73; }
+.landing .lab.active { color: #164e6b; border-left-color: var(--accent); background: rgba(18,107,145,.12); }
+.landing #lab-hint { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(18,107,145,.18); color: #526e80; font-size: 9px; }
+
+.landing .hud {
+  position: fixed; left: 20px; bottom: 18px; z-index: 3; display: flex; gap: 10px; align-items: center;
+  font: 500 11px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  text-shadow: none;
+}
+.landing .hud i { width: 8px; height: 8px; border-radius: 50%; background: #7fd18a; transition: background .2s; }
+.landing .hud[data-mode="apart"] i { background: var(--accent); }
+.landing .bar { width: 90px; height: 2px; background: rgba(32,60,80,.22); position: relative; }
+.landing .bar b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); }
+.landing .cue {
+  position: fixed; left: 50%; bottom: 22px; z-index: 3; transform: translateX(-50%);
+  font: 11px ui-monospace, Menlo, monospace; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--muted); text-align: center; transition: opacity .4s; text-shadow: none;
+}
+.landing .cue::after { content: ""; display: block; width: 1px; height: 26px; margin: 8px auto 0;
+  background: linear-gradient(var(--muted), transparent); animation: bob 1.8s ease-in-out infinite; }
+.landing .cue.gone { opacity: 0; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+
+@media (max-width: 820px) {
+  /* `:root` in the source; `.landing` here, because the variable is read by
+     `.sway`/`.rig` inside the wrapper and `:root` is not a descendant of it. */
+  .landing { --W: 92vw; }
+  .landing .stage { align-items: start; padding-top: 14vh; }
+  .landing .floor { top: calc(14vh + 36vw); width: 80vw; margin-left: -40vw; }
+  .landing .s { align-items: flex-end; padding-bottom: 9vh; }
+  .landing .copy { max-width: 30ch; padding: 1rem 1.2rem 1.1rem; }
+  .landing .bar { display: none; }
+  .landing .hud { right: 20px; }
+  .landing #hud-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* on phones the list collapses to one chip showing the current structure */
+  .landing #labels { top: 12px; right: 12px; transform: none; width: auto; padding: 7px 11px; }
+  .landing .labels-kicker, .landing #lab-hint, .landing .lab:not(.active) { display: none; }
+  .landing .lab.active { margin: 0; background: none; border: 0; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .landing .rig.float .sl { animation: none; } }
+
+
+/* Medical cross: fixed behind the eye and page content. */
+.landing .medical-cross {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  display: grid; place-items: center; overflow: hidden;
+}
+.landing .medical-cross svg {
+  width: min(72vw, 860px); height: min(72vw, 860px);
+  color: #237346; opacity: .28;
+}
+@media (max-width: 820px) {
+  .landing .medical-cross { align-items: start; padding-top: 10vh; }
+  .landing .medical-cross svg { width: 96vw; height: 96vw; }
+}
+
+
+/* STEAMPUNK / CLOCKWORK ATELIER */
+.landing { --ink: #f3e1bb; --muted: #c2ad88; --accent: #e6b85d; }
+html.landing-active { background: #151411; }
+body.landing-active { background: radial-gradient(ellipse at 50% 42%, #5e4930 0%, #302a21 40%, #1d1c18 72%, #121411 100%) fixed; }
+body.landing-active::before { content: ''; position: fixed; inset: 14px; border: 1px solid #a57d3b55; box-shadow: inset 0 0 0 5px #151411, inset 0 0 0 6px #a57d3b33; pointer-events: none; z-index: 5; }
+.landing .workshop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(0deg, transparent 0 79px, #d6b16a05 80px), repeating-linear-gradient(90deg, transparent 0 79px, #d6b16a05 80px); }
+.landing .gear { position: absolute; width: 49vmin; height: 49vmin; color: #b88b45; opacity: .16; }
+.landing .gear-a { top: -14vmin; right: -8vmin; transform: rotate(18deg); }
+.landing .gear-b { bottom: -19vmin; left: -13vmin; width: 66vmin; height: 66vmin; transform: rotate(-12deg); }
+.landing .atelier { position: fixed; left: 6vw; top: 36px; z-index: 3; color: #d8b572; font: 10px/1.7 ui-monospace, monospace; letter-spacing: .22em; text-transform: uppercase; }
+.landing .atelier strong { display: block; font-size: 12px; color: #f1dba8; letter-spacing: .28em; }
+.landing .medical-cross svg { color: #b98c42; opacity: .09; }
+.landing .glow { background: radial-gradient(closest-side, #e8b95a20, transparent); }
+.landing .copy { border-radius: 3px; border: 1px solid #a67b3d80; background: linear-gradient(135deg, #30271deF, #1c1b17ee); box-shadow: 0 14px 50px #0005, inset 0 0 0 4px #151411, inset 0 0 0 5px #8b6b3433; position: relative; padding: 1.6rem; }
+.landing .copy::before, .landing .copy::after { content: ''; position: absolute; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: #c49a50; box-shadow: 0 1px 3px #000; }
+.landing .copy::before { left: 9px; } .landing .copy::after { right: 9px; }
+.landing h1, .landing h2 { font-family: Georgia, serif; }
+.landing .foot { color: #c7a267; }
+.landing #labels { border-radius: 3px; border-color: #a67b3d80; color: #e8d3ad; background: #201e18ed; box-shadow: inset 0 0 0 3px #151411; }
+.landing .lab { color: #a18f70; } .landing .lab.done { color: #cab68e; }
+.landing .lab.active { color: #ffe4a0; background: #b98c4226; }
+.landing #lab-hint { color: #b6a080; border-top-color: #a67b3d55; }
+.landing .bar { background: #c49a5033; } .landing .hud i { background: #7eab91; box-shadow: 0 0 9px #7eab9166; }
+.landing .hud, .landing .cue { color: #d3b47e; }
+@media(max-width: 820px) { .landing .atelier { top: 26px; left: 26px; font-size: 8px; } .landing .atelier strong { font-size: 10px; } .landing .copy { padding: 1.2rem; } }
+
+
+/* Porcelain / blue iris reference fusion */
+body.landing-active { background: radial-gradient(ellipse at 50% 40%, #8b9185 0%, #535c53 32%, #303b34 62%, #171f1c 100%) fixed; }
+.landing .glow { background: radial-gradient(closest-side, #edfff029, transparent); }
+.landing .gear { opacity: .13; }
+.landing .medical-cross svg { color: #8bb4a0; opacity: .065; }
+.landing .copy { background: linear-gradient(135deg, #27332eef, #18211eee); }
+.landing #labels { background: #1b2722ed; }
+.landing .rig { filter: none; transform-style: preserve-3d; }
+
+/* Keep the central aperture clear of the white blink-fill panels. */
+.landing #lidfill-up, .landing #lidfill-low { display: none; }
+
+
+/* Peach skin and blue iris balanced against a cool slate workshop. */
+html.landing-active { background: #202d39; }
+body.landing-active { background: radial-gradient(ellipse at 50% 42%, #8aabba 0%, #587989 35%, #344d60 68%, #202d39 100%) fixed; }
+.landing .copy { background: linear-gradient(135deg, #263747ef, #192631ee); }
+.landing #labels { background: #1c2b38ed; }
+.landing .glow { background: radial-gradient(closest-side, #d7efff25, transparent); }
+.landing .medical-cross svg { color: #437e68; opacity: .58; }
+
+
+/* ---------- NetraTrust: action buttons, metrics, emphasis ---------- */
+.landing .copy { max-width: 31ch; }
+.landing .copy strong { color: #ffe9bd; font-weight: 600; }
+.landing .acts { margin-top: 1.35rem; display: flex; flex-wrap: wrap; gap: .55rem; }
+.landing .btn {
+  display: inline-block; font: 600 10px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .17em; text-transform: uppercase; color: #efd9a6; text-decoration: none;
+  padding: .72rem .95rem; border-radius: 3px; border: 1px solid #a67b3d80;
+  background: linear-gradient(135deg, #342b1f, #221d17);
+  box-shadow: inset 0 0 0 2px #151411, 0 3px 10px #0004;
+  cursor: pointer; transition: color .22s ease, border-color .22s ease, box-shadow .22s ease, transform .22s ease;
+}
+.landing .btn:hover { color: #fff1cf; border-color: var(--accent); transform: translateY(-1px);
+  box-shadow: inset 0 0 0 2px #151411, 0 0 18px #e6b85d30, 0 4px 12px #0005; }
+.landing .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: #fff1cf; }
+.landing .btn.primary { background: linear-gradient(135deg, #6a5226, #3c2f19); border-color: var(--accent); color: #ffeec4; }
+.landing .stat {
+  margin-top: 1rem; padding-top: .8rem; border-top: 1px solid #a67b3d33;
+  font: 10px/1.75 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em;
+  color: var(--accent); text-transform: uppercase;
+}
+@media (max-width: 820px) {
+  .landing .btn { padding: .62rem .8rem; font-size: 9px; letter-spacing: .13em; }
+  .landing .acts { gap: .45rem; margin-top: 1.1rem; }
+  .landing .stat { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) { .landing .btn { transition: none; } }
