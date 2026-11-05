@@ -98,7 +98,7 @@ def test_proba_to_milli_refuses_a_degenerate_distribution():
 
 
 def test_prediction_carries_no_float():
-    """Floats are banned from ledger payloads (CLAUDE.md)."""
+    """Floats are banned from ledger payloads (BUILD_RULES.md)."""
     prediction = dr.DRPrediction(
         proba_milli=(100, 200, 300, 200, 200), model_version="x"
     )

@@ -19,3 +19,6 @@ netra/ui/*.tsbuildinfo
 artifacts/
 
 *.bak
+
+# Local Claude Code config (hooks, tool permissions). Rule DOCS live in docs/rules/.
+.claude/

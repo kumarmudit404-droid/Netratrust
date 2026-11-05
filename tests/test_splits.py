@@ -1,4 +1,4 @@
-"""The split invariants from `.claude/rules/ml.md`.
+"""The split invariants from `docs/rules/ml.md`.
 
 Patient-level duplication across splits is described in that file as the most
 common and most fatal error in this literature, and the reason it is fatal is

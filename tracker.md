@@ -2,7 +2,7 @@
 
 > **Window:** Wednesday 2026-10-28 → Friday 2026-10-30. Today is Tuesday 2026-10-27;
 > the starter repo is scaffolded (see `memory.md`). Lanes and ownership are from
-> `CLAUDE.md`. Scope is from `SPEC.md`, which is **frozen** — no task may add an
+> `BUILD_RULES.md`. Scope is from `SPEC.md`, which is **frozen** — no task may add an
 > endpoint, a referral state, or a dependency.
 
 ## Legend
@@ -151,7 +151,7 @@ nine `/v1` endpoints are frozen with none of them grading an image.
 
 `netra/sidecar/` is a separate local process (`GET /health`, `POST /gate`),
 bound to `127.0.0.1`, refusing a non-loopback `Origin`. Stdlib `http.server`,
-not FastAPI: CLAUDE.md prefers stdlib, and a sidecar importing `netra.api`
+not FastAPI: BUILD_RULES.md prefers stdlib, and a sidecar importing `netra.api`
 would be one refactor from becoming the tenth endpoint this avoids.
 **It is not deployed and must not be** — `fly.toml` runs the API and the SPA;
 there is no server-side inference anywhere, which is what keeps SPEC.md's

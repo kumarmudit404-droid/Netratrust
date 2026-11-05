@@ -2,7 +2,7 @@
 
     python -m netra.models.fit_thresholds --images data/aptos/images/calib
 
-**The calibration split only.** `.claude/rules/ml.md`: "The test split is
+**The calibration split only.** `docs/rules/ml.md`: "The test split is
 touched exactly once, at the end. Thresholds, early stopping, and abstention
 levels are set on the calibration split." `dataset.collect` refuses
 `split="test"` unless `allow_test=True`, and this module never passes it. There

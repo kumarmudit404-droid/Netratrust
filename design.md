@@ -1,6 +1,6 @@
 # NetraTrust — UI Design System
 
-> **Source of truth:** `SPEC.md` §7 (UI) and `CLAUDE.md`. The front end is a custom
+> **Source of truth:** `SPEC.md` §7 (UI) and `BUILD_RULES.md`. The front end is a custom
 > **Vite + React + TypeScript** PWA in `netra/ui` — Tailwind CSS, shadcn/ui, TanStack
 > Query, Recharts, vite-plugin-pwa, Framer Motion. Colour values and the type scale
 > below are design decisions for this document; contrast ratios are **measured** with

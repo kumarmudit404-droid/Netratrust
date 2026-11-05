@@ -17,7 +17,7 @@ from netra.ledger.chain import append, current_head
 from netra.ledger.keys import SERVER_KID, KeyStore, verify_signature
 
 # `netra.ledger.verify` and `netra.ledger.tamper` are deliberately NOT imported
-# here. Both are runnable with `python -m` (CLAUDE.md documents
+# here. Both are runnable with `python -m` (BUILD_RULES.md documents
 # `python -m netra.ledger.verify`), and importing a submodule in its package's
 # __init__ makes runpy emit "found in sys.modules after import of package ...
 # this may result in unpredictable behaviour". Import them by module path:

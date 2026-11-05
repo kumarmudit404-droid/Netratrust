@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 137" width="240" height="137" role="img" aria-labelledby="t">
+  <title id="t">NetraTrust</title>
+  <!-- Palette and display face are the landing's own, from netra/ui/src/index.css:
+       ink #203c50, accent #237970, bg #fdf8e9. -->
+  <rect width="240" height="137" rx="14" fill="#fdf8e9"/>
+
+  <!-- Eye: one continuous lens outline, so the lid reads as a single stroke. -->
+  <path d="M34 47 Q120 -11 206 47 Q120 105 34 47 Z"
+        fill="none" stroke="#203c50" stroke-width="5"
+        stroke-linejoin="round"/>
+  <circle cx="120" cy="47" r="25" fill="#237970"/>
+  <circle cx="120" cy="47" r="10" fill="#203c50"/>
+  <circle cx="114" cy="41" r="4" fill="#fdf8e9"/>
+
+  <text x="120" y="119" text-anchor="middle"
+        font-family='"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif'
+        font-size="30" letter-spacing="0.2">
+    <tspan fill="#203c50">Netra</tspan><tspan fill="#237970">Trust</tspan>
+  </text>
+</svg>

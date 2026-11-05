@@ -52,7 +52,7 @@ def decide(
 ) -> tuple[int | None, bool]:
     """Validate an encounter and return `(dr_grade, abstained)`.
 
-    The first invariant in CLAUDE.md: a failed quality gate is NOT a negative DR
+    The first invariant in BUILD_RULES.md: a failed quality gate is NOT a negative DR
     result, it is "no result". A rejected image therefore carries no prediction
     set, no grade, and cannot be called an abstention either - nothing was
     graded, so there was nothing to abstain from.

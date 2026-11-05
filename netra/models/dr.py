@@ -41,7 +41,7 @@ class DRPrediction:
     """A 5-class distribution, as scaled integers.
 
     Probabilities are per-mille integers because these values travel into a
-    ledger payload and floats are banned there (CLAUDE.md): `rfc8785` emits
+    ledger payload and floats are banned there (BUILD_RULES.md): `rfc8785` emits
     `{"n":1}` for `1.0` while `json.dumps` emits `{"n":1.0}`, which breaks a
     hash chain silently.
     """

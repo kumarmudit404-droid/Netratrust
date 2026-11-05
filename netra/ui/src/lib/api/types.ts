@@ -1,7 +1,7 @@
 /**
  * Types for the nine frozen endpoints in SPEC.md "API contract".
  *
- * Rules carried over from SPEC.md / CLAUDE.md:
+ * Rules carried over from SPEC.md / BUILD_RULES.md:
  *  - IDs and timestamps are STRINGS (ints above 2^53 raise in rfc8785).
  *  - `ledger_idx` / `idx` are ints below 2^53, so `number` is safe.
  *  - No floats anywhere near a ledger payload: scores travel as scaled ints
@@ -119,7 +119,7 @@ export interface LedgerCheckpointResponse {
 /** SPEC.md: "model version, last audit, gradability rate, drift flag".
  *
  *  SETTLED with Lane A. `gradability` is counts, not a bare rate, because
- *  CLAUDE.md forbids a bare percentage for n < 30 and the denominator is what
+ *  BUILD_RULES.md forbids a bare percentage for n < 30 and the denominator is what
  *  that rule needs. `model_version` is the non-nullable sentinel "unpinned"
  *  until an audit passes — see modelVersion.ts.
  *

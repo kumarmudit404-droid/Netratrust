@@ -96,7 +96,7 @@ def main() -> int:
         # rules.md: the test split is touched exactly once, at the end.
         print(
             "refusing to fetch the test split: it is touched exactly once, at the "
-            "end (.claude/rules/ml.md). Fit on calib.",
+            "end (docs/rules/ml.md). Fit on calib.",
             file=sys.stderr,
         )
         return 2
@@ -121,7 +121,7 @@ def main() -> int:
         if i % 10 == 0 or i == len(ids):
             print(f"  {i}/{len(ids)} requested, {ok} present", flush=True)
 
-    # Retained fraction, out loud, per .claude/rules/ml.md.
+    # Retained fraction, out loud, per docs/rules/ml.md.
     print(f"\n{args.split}: {ok}/{len(ids)} = {ok / max(len(ids), 1):.4f} retained")
     if failures:
         print(f"{len(failures)} failed, first few:")

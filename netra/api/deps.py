@@ -1,6 +1,6 @@
 """Application state and request dependencies.
 
-Handlers are SYNC `def`. SQLite is blocking, and CLAUDE.md names async handlers
+Handlers are SYNC `def`. SQLite is blocking, and BUILD_RULES.md names async handlers
 over blocking SQLite as the top time sink on this project. Nothing in this
 module is a coroutine.
 """

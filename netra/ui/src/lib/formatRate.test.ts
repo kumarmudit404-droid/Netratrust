@@ -1,5 +1,5 @@
 /**
- * Lane B's logic gate for the n<30 rule (design.md section 7, CLAUDE.md
+ * Lane B's logic gate for the n<30 rule (design.md section 7, BUILD_RULES.md
  * clinical invariants). This is the rule that, if it regresses, puts a bare
  * percentage on a sample too small to support it.
  */

@@ -2,7 +2,7 @@
 
     uvicorn netra.api.main:app --reload --port 8000
 
-Two conventions from CLAUDE.md are enforced here rather than hoped for:
+Two conventions from BUILD_RULES.md are enforced here rather than hoped for:
 
 - **`lifespan=` context manager**, not `@app.on_event`. The decorator is
   deprecated and mixing the two silently disables handlers.
@@ -209,13 +209,13 @@ def contract_routes(app: FastAPI) -> list:
 
 
 def _assert_handlers_are_sync(app: FastAPI) -> None:
-    """Fail at import time if one of OUR handlers is `async def`. See CLAUDE.md."""
+    """Fail at import time if one of OUR handlers is `async def`. See BUILD_RULES.md."""
     for route in contract_routes(app):
         endpoint = getattr(route, "endpoint", None)
         if endpoint is not None and inspect.iscoroutinefunction(endpoint):
             raise TypeError(
                 f"{route.path} is an async handler; SQLite is blocking, so route "
-                f"handlers must be sync def (CLAUDE.md)"
+                f"handlers must be sync def (BUILD_RULES.md)"
             )
 
 

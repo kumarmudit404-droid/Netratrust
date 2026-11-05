@@ -1,6 +1,6 @@
 # NetraTrust — Architecture
 
-> **Source of truth:** `SPEC.md` (frozen 2026-10-27), `CLAUDE.md`, `requirements.txt`.
+> **Source of truth:** `SPEC.md` (frozen 2026-10-27), `BUILD_RULES.md`, `requirements.txt`.
 > The API table in `SPEC.md` is **frozen**; nothing below may contradict it. Facts not
 > in those files are marked **TBD — verify**.
 
@@ -49,7 +49,7 @@ preprocessing = background removal + resize only.
 ```
 netratrust/
 ├── SPEC.md                 # frozen contract
-├── CLAUDE.md               # conventions
+├── BUILD_RULES.md               # conventions
 ├── requirements.txt        # pinned deps
 ├── config/thresholds.yaml  # fitted on calibration split only
 ├── data/splits/            # frozen, committed, patient-level
@@ -106,7 +106,7 @@ The nine frozen endpoints (shapes in `SPEC.md`):
 | GET | `/v1/metrics/sites` | per-site distributions (Wilson intervals) |
 | GET | `/v1/queue/depth` | pending sync count |
 
-Conventions (from `CLAUDE.md`): handlers are **sync `def`** (SQLite is blocking);
+Conventions (from `BUILD_RULES.md`): handlers are **sync `def`** (SQLite is blocking);
 use a `lifespan=` context manager; every decision is appended to the ledger **before**
 the response is returned. Sync is at-least-once with server-side dedup on an
 Idempotency-Key header.

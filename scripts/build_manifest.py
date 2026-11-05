@@ -10,7 +10,7 @@ The manifest columns are fixed by `make_splits.py`:
 so that this script, `scripts/extend_splits.py` and the Kaggle notebook share
 one implementation.
 
-Every filtering step prints its retained fraction, per `.claude/rules/ml.md`:
+Every filtering step prints its retained fraction, per `docs/rules/ml.md`:
 "reasonable" preprocessing has been documented to silently discard 80-94% of
 public corpora, and the only defence is counting out loud.
 """

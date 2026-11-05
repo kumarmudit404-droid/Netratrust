@@ -1,7 +1,7 @@
 """Growing the corpus must move nothing. `netra/models/splits.py`.
 
 The committed splits were frozen over 366 APTOS images; the Kaggle run grows
-them to the full 3,662. `.claude/rules/ml.md` forbids re-shuffling, and the
+them to the full 3,662. `docs/rules/ml.md` forbids re-shuffling, and the
 only thing that makes growth distinguishable from a re-shuffle is that every
 image which already had a fold still has the SAME fold afterwards.
 

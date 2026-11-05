@@ -15,15 +15,15 @@ With `dr.refer_grades = [2,3,4]` the two actions are refer and do-not-refer.
 three and names no single severity. `{0,3}` straddles the line, so a clinician
 decides.
 
-**Two corrections to CLAUDE.md's MAPIE note, both verified against the
+**Two corrections to BUILD_RULES.md's MAPIE note, both verified against the
 installed 1.6.0:**
 
-1. CLAUDE.md says `fit -> conformalize -> predict_set`. With `prefit=True`,
+1. BUILD_RULES.md says `fit -> conformalize -> predict_set`. With `prefit=True`,
    calling `fit()` **raises**: "The fit method must be skipped when the prefit
    parameter is set to True. Use the conformalize method directly after
    instanciation." So the flow is `conformalize -> predict_set`.
 2. `predict_set` returns a **tuple** `(point_predictions, sets)`, not a bare
-   array. CLAUDE.md's "3-D (n, n_classes, n_levels) bool array" describes the
+   array. BUILD_RULES.md's "3-D (n, n_classes, n_levels) bool array" describes the
    SECOND element; the first is a 1-D array of argmax labels.
 """
 

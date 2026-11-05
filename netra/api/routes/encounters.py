@@ -8,7 +8,7 @@ Two properties of this handler are load-bearing:
    (rules.md section 4.3).
 2. **A rejected image is "no result"**, not a negative DR result. It carries no
    prediction set and no grade, and it is not an abstention either - nothing was
-   graded, so there was nothing to abstain from (CLAUDE.md, invariant 1).
+   graded, so there was nothing to abstain from (BUILD_RULES.md, invariant 1).
 """
 
 from __future__ import annotations

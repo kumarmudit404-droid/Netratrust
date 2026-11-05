@@ -15,7 +15,7 @@ This module exists to replace the synthetic stand-in in
   graders on real clinical captures, including the real failure modes - small
   pupil, media opacity, misaligned flash - that no `cv2.GaussianBlur` produces.
 
-`.claude/rules/ml.md` requires the two to stay in SEPARATE tables, so nothing
+`docs/rules/ml.md` requires the two to stay in SEPARATE tables, so nothing
 here pools them and the provenance sidecar written by the notebook records
 which labels a head was fitted on.
 
@@ -254,7 +254,7 @@ def resolve(
     number to look at before anything else: EyeQ's train rows come from the
     EyePACS **train** set and its test rows from the EyePACS **test** set, so
     a mirror carrying only one of the two resolves roughly half the labels.
-    `.claude/rules/ml.md` requires the fraction out loud at every such step.
+    `docs/rules/ml.md` requires the fraction out loud at every such step.
     """
     matched: list[tuple[EyeQRow, pathlib.Path]] = []
     unmatched = 0
@@ -417,10 +417,10 @@ def features_for_paths(
 def gate_report(y_true: np.ndarray, p_gradable: np.ndarray) -> dict:
     """The REAL-label gate table. Every number comes from `netra/eval/metrics.py`.
 
-    `.claude/rules/ml.md` forbids computing a metric inline, so accuracy is the
+    `docs/rules/ml.md` forbids computing a metric inline, so accuracy is the
     only thing counted here and it is reported as a count with the Wilson
     interval `metrics.wilson_interval` returns - never as a bare percentage,
-    per CLAUDE.md.
+    per BUILD_RULES.md.
 
     Thresholded at 0.5 because this is the HEAD's own accuracy. The gate's
     three-way verdict uses the two cut-points in `config/thresholds.yaml` and

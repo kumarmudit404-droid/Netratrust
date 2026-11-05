@@ -121,7 +121,7 @@ def test_a_missing_gate_cannot_be_posted_as_an_encounter(
 
 
 def test_a_reject_is_no_result_not_a_grade_and_not_an_abstention(image_file):
-    """CLAUDE.md invariant 1. A reject must carry no grade and no prediction
+    """BUILD_RULES.md invariant 1. A reject must carry no grade and no prediction
     set, and must not be recorded as an abstention - nothing was graded, so
     there was nothing to abstain from."""
     engine = InferenceEngine(

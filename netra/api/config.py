@@ -3,7 +3,7 @@
 Why a parser and not PyYAML: PyYAML is not pinned in `requirements.txt` (it is
 only present transitively, via timm), and rules.md section 1 allows only what
 is pinned, with any addition requiring an agreed change to `requirements.txt`
-in its own commit. CLAUDE.md also says to prefer a stdlib solution over a
+in its own commit. BUILD_RULES.md also says to prefer a stdlib solution over a
 dependency. So this reads the small, flat subset of YAML that
 `config/thresholds.yaml` actually uses, and RAISES on anything it does not
 recognise rather than guessing - a threshold that is silently misparsed is

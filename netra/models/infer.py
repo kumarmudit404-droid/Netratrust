@@ -19,7 +19,7 @@ exist, and each is reported as itself rather than collapsed into a guess:
 | gate says reject                | `reject`        | `null`         | gate's own    |
 | gate admits, DR checkpoint gone | `usable`        | `null`         | `unloaded`    |
 
-A rejected image is "no result" (CLAUDE.md invariant 1): it carries no grade
+A rejected image is "no result" (BUILD_RULES.md invariant 1): it carries no grade
 and no prediction set, and it is NOT an abstention, because nothing was graded.
 That matches what Lane A's `POST /v1/encounters` enforces server-side - it
 returns 422 if a reject arrives carrying a prediction set.

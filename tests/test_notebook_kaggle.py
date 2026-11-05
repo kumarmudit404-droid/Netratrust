@@ -96,7 +96,7 @@ def test_the_run_book_states_every_stop_condition(nb):
 
 
 def test_the_test_split_is_never_collected(nb):
-    """`.claude/rules/ml.md`: touched exactly once, at the end - not here."""
+    """`docs/rules/ml.md`: touched exactly once, at the end - not here."""
     body = code(nb)
     assert "allow_test" not in body, "a cell asks collect() for the test split"
     assert 'collect("test"' not in body
@@ -140,7 +140,7 @@ def test_it_never_regenerates_a_split_or_calls_train_test_split(nb):
 
 
 def test_metrics_come_from_the_eval_module_not_from_the_cells(nb):
-    """`.claude/rules/ml.md` forbids computing a metric inline in a notebook."""
+    """`docs/rules/ml.md` forbids computing a metric inline in a notebook."""
     body = code(nb)
     for inline in (
         "cohen_kappa_score",

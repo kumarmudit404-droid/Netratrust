@@ -22,7 +22,7 @@ writes nothing if a single image would move or disappear.
 What this script will NOT do:
 * change the seed (20261027) or the fractions - either re-picks every fold;
 * write over `data/splits/` by default - it writes somewhere you name, and you
-  commit the result deliberately, because `.claude/rules/ml.md` makes the
+  commit the result deliberately, because `docs/rules/ml.md` makes the
   splits a committed artifact and rules.md section 6 makes changing them a
   team decision;
 * touch the test split's CONTENTS in any way a reader could not reproduce from

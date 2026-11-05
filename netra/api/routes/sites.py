@@ -1,7 +1,7 @@
 """Site status, audit, per-site metrics and queue depth.
 
 Every proportion here travels as COUNTS plus a Wilson interval, never as a bare
-rate. Two rules force that: CLAUDE.md forbids a bare percentage for n < 30, and
+rate. Two rules force that: BUILD_RULES.md forbids a bare percentage for n < 30, and
 the front end never computes a statistic. The interval comes from
 `netra.eval.metrics.wilson_interval` - the single source for every number the
 team reports (rules.md section 7).
@@ -97,7 +97,7 @@ def _latest_audit(session: Session, site_id: str) -> dict | None:
     """The most recent `site_audit` ledger entry for this site.
 
     Audit results live in the LEDGER, not in a table of their own. No decision
-    exists outside the ledger (CLAUDE.md), and an audit result is a decision
+    exists outside the ledger (BUILD_RULES.md), and an audit result is a decision
     about whether a site's grades count. It also keeps the table count where
     architecture.md section 3 put it.
     """

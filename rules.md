@@ -1,7 +1,7 @@
 # NetraTrust — Working Rules for Claude Code
 
 > These rules are operational. The **contract** is `SPEC.md`; the **conventions** are
-> `CLAUDE.md`; the path-scoped ML rules are `.claude/rules/ml.md`. This file says how to
+> `BUILD_RULES.md`; the path-scoped ML rules are `docs/rules/ml.md`. This file says how to
 > work on the repo without breaking any of them. Where this file and `SPEC.md` disagree,
 > **`SPEC.md` wins** and this file is what gets fixed. Rules already enforced elsewhere
 > are referenced here, not restated.

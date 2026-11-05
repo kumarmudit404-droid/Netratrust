@@ -116,7 +116,7 @@ class LedgerCheckpointResponse(BaseModel):
 
 
 class SiteStatusResponse(BaseModel):
-    """`gradability` is counts + Wilson, never a bare rate (CLAUDE.md, n < 30).
+    """`gradability` is counts + Wilson, never a bare rate (BUILD_RULES.md, n < 30).
 
     `model_version` is the version pinned by the most recent PASSED audit. A
     site that has never been audited reports `"unpinned"` rather than null,

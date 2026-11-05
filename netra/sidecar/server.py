@@ -13,7 +13,7 @@ and nothing else: it is read into memory, written to a temporary file because
 `InferenceEngine.run` takes a path, hashed, graded, and deleted in a `finally`.
 Nothing is logged but the hash.
 
-It deliberately uses `http.server` rather than FastAPI. CLAUDE.md asks for a
+It deliberately uses `http.server` rather than FastAPI. BUILD_RULES.md asks for a
 stdlib solution over a dependency, and more importantly a sidecar that imported
 `netra.api` would be one refactor away from becoming the tenth endpoint this
 design exists to avoid. The only shared surface is `netra.models.infer`.

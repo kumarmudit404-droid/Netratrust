@@ -20,7 +20,7 @@ Two things this must never be confused with:
   Gaussian blur from no Gaussian blur", which is a far easier problem than
   real-world gradability.
 * Any gate performance measured with it belongs in the SYNTHETIC table.
-  `.claude/rules/ml.md`: "keep real poor-quality images and synthetic
+  `docs/rules/ml.md`: "keep real poor-quality images and synthetic
   degradations in SEPARATE tables. They are different distributions and
   pooling them is a validity error."
 
@@ -133,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "\nSYNTHETIC head. A human never judged these images. Any gate number "
         "measured with it belongs in the synthetic table, never pooled with real "
-        "poor-quality images (.claude/rules/ml.md)."
+        "poor-quality images (docs/rules/ml.md)."
     )
     return 0
 

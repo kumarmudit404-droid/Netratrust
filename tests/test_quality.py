@@ -267,7 +267,7 @@ def test_the_verdict_band_follows_thresholds_yaml(p, expected):
 
 
 def test_the_score_is_a_scaled_integer_not_a_float():
-    """It travels into a ledger payload, where floats are banned (CLAUDE.md)."""
+    """It travels into a ledger payload, where floats are banned (BUILD_RULES.md)."""
     result = QualityGate(features=_FakeFeatures(), head=_FixedHead(0.873))(fundus())
     assert isinstance(result.score_milli, int)
     assert result.score_milli == 873

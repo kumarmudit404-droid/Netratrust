@@ -1,6 +1,6 @@
 # NetraTrust — Product Requirements (PRD)
 
-> **Source of truth:** `SPEC.md` (frozen 2026-10-27) and `CLAUDE.md`. Where this
+> **Source of truth:** `SPEC.md` (frozen 2026-10-27) and `BUILD_RULES.md`. Where this
 > document and `SPEC.md` disagree, `SPEC.md` wins. Facts not present in those files
 > are marked **TBD — verify**. Ownership is by lane, not by person.
 

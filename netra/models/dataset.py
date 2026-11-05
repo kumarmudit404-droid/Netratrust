@@ -1,6 +1,6 @@
 """Dataset over a frozen split. Reads splits; never creates them.
 
-`.claude/rules/ml.md`: "Splits come from `data/splits/*.json`. They are frozen
+`docs/rules/ml.md`: "Splits come from `data/splits/*.json`. They are frozen
 and committed. Never regenerate them, never re-shuffle, never call
 `train_test_split` in model or eval code." So this module takes a split NAME
 and refuses anything else - there is no shuffle, no ratio argument, and no way
@@ -124,12 +124,12 @@ def collect(
 
     Returns `(examples, report)`. The report carries the retained fraction,
     because a split of 75 ids with 4 images on disk silently becomes a 4-image
-    experiment otherwise - the exact failure `.claude/rules/ml.md` warns about.
+    experiment otherwise - the exact failure `docs/rules/ml.md` warns about.
     """
     if name == "test" and not allow_test:
         raise PermissionError(
             "the test split is touched exactly once, at the end "
-            "(.claude/rules/ml.md). Pass allow_test=True only for that run."
+            "(docs/rules/ml.md). Pass allow_test=True only for that run."
         )
 
     ids = read_split(name, splits_dir)

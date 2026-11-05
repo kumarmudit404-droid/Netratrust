@@ -19,7 +19,7 @@ Thresholds before conformalisation, because the conformal step needs a gate
 that already decides `usable / borderline / reject`. Verify before the swap,
 because a UI pointed at a model nobody has checked is harder to debug than a
 model on its own. And **never** re-fit a threshold after seeing test results —
-`.claude/rules/ml.md` and `tracker.md`'s "evaluation drift" risk both say so,
+`docs/rules/ml.md` and `tracker.md`'s "evaluation drift" risk both say so,
 and no hook catches it. Review the diff.
 
 ---
@@ -125,7 +125,7 @@ python -m netra.models.fit_thresholds --images data/aptos/images/calib
       real output waits for T-09.
 - [ ] MAPIE v1 order is `fit` -> `conformalize` -> `predict_set`, and
       `predict_set` returns a 3-D `(n, n_classes, n_levels)` bool array even for
-      one confidence level (CLAUDE.md). A 2-D assumption here fails silently.
+      one confidence level (BUILD_RULES.md). A 2-D assumption here fails silently.
 - [ ] Sanity-check the abstention rule on real sets: abstain when the set spans
       more than one **clinical action**, not when it is merely large. `{2,3,4}`
       is wide and must NOT abstain; `{1,2}` is small and must.
@@ -150,7 +150,7 @@ python -m netra.models.infer path/to/a/real/fundus.png
       **0.95 means a leaked split** (`SPEC.md` §2) — go back to the splits, do
       not celebrate.
 - [ ] Never put a local split score next to a public leaderboard score
-      (CLAUDE.md).
+      (BUILD_RULES.md).
 
 ---
 

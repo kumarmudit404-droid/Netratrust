@@ -3,7 +3,7 @@
 > **Append-only.** Add new entries at the bottom; never edit or delete a past entry. If
 > something here turns out wrong, append a correction that references it. This mirrors
 > the ledger discipline: history is added to, not rewritten. The source of truth for
-> anything technical is `SPEC.md` and `CLAUDE.md`, not this file — this file records
+> anything technical is `SPEC.md` and `BUILD_RULES.md`, not this file — this file records
 > *what happened*, not what the contract says. Ownership is by lane (A/B/C), not person.
 
 ## Entry format
@@ -17,8 +17,8 @@
 ---
 
 ### 2026-10-27 — Lane A — Starter repo scaffolded
-- what changed: created `SPEC.md`, `CLAUDE.md`, `requirements.txt`, `.python-version`,
-  `.claude/settings.json` (Stop hook: `pytest -q || exit 2`), `.claude/rules/ml.md`,
+- what changed: created `SPEC.md`, `BUILD_RULES.md`, `requirements.txt`, `.python-version`,
+  `.claude/settings.json` (Stop hook: `pytest -q || exit 2`), `docs/rules/ml.md`,
   `config/thresholds.yaml`, `.gitignore`, package `__init__.py` files.
 - verified: repo tree complete; names removed; ownership is by lane.
 - unverified: none.
@@ -66,7 +66,7 @@
   mapping, motion/offline sections. `architecture.md` — UI stack rows replaced with
   Vite/React/TS + Tailwind/shadcn/TanStack Query/Recharts/vite-plugin-pwa/Framer Motion,
   `netra/ui` folder structure expanded, and one line added that the API needs **CORS for
-  local dev (Lane A task)**. `CLAUDE.md` — UI command is now
+  local dev (Lane A task)**. `BUILD_RULES.md` — UI command is now
   `cd netra/ui && npm run dev`. `tracker.md` — T-13..T-17 relabelled to the React routes.
 - verified: all nine contrast ratios in `design.md` §2 recomputed from the hex values
   with the WCAG relative-luminance formula. Every AA verdict in the table is unchanged,
@@ -154,7 +154,7 @@
   with the same formula as `netra/eval/metrics.py::wilson_interval` and replaced, so no
   fabricated statistic ships even in demo data. Lane respected: every file written is
   under `netra/ui`, plus the four root docs and three root config files you approved
-  (`SPEC.md`, `requirements.txt`, `pyproject.toml`, `.gitignore`, `CLAUDE.md`,
+  (`SPEC.md`, `requirements.txt`, `pyproject.toml`, `.gitignore`, `BUILD_RULES.md`,
   `design.md`, `architecture.md`, `tracker.md`).
 - unverified / TBD: the app has **never been run against the real API** — every screen
   is on mock data, and `VITE_USE_MOCK=0` is untested. **CORS is still not implemented**
@@ -342,7 +342,7 @@
   `payload_hash` instead. SPEC.md wins (rules.md §0) and the test
   `test_entry_hash_matches_the_spec_formula` pins the SPEC form.
 - verified: **20 tests pass.** `rfc8785.dumps({"n": 1.0})` was ASSERTED in a test to emit
-  `{"n":1}` against `json.dumps`'s `{"n": 1.0}` — the CLAUDE.md warning is now a failing
+  `{"n":1}` against `json.dumps`'s `{"n": 1.0}` — the BUILD_RULES.md warning is now a failing
   test if it ever stops being true. rfc8785 does NOT raise on a float, it silently
   normalises, so `reject_floats` is the guard that actually stops them; it reports the
   path (`payload.sets[1].p`) and lets `bool` through (a subclass of `int` that
@@ -925,7 +925,7 @@ deployed, nothing pushed.
   downloading (~89 GiB), so the quality gate has no real quality-labelled corpus here.
 - **APTOS publishes no patient identifier.** It ships `id_code, diagnosis` only, so
   `build_manifest.py` sets `patient_id = image_id` and the patient-level guarantee in
-  `.claude/rules/ml.md` is **VACUOUS for this corpus** — `n_patients == n_images` in
+  `docs/rules/ml.md` is **VACUOUS for this corpus** — `n_patients == n_images` in
   `meta.json` for that reason, not because the splitter failed. If two APTOS rows are
   one patient's two eyes they can land in different folds and nothing here would catch
   it. Recorded loudly because it is invisible in results.
@@ -969,7 +969,7 @@ deployed, nothing pushed.
 - the metrics were CHARACTERISED before being asserted, so the expected values are
   measured rather than assumed. Results, all in the textbook direction:
   `calibration_slope_intercept` on calibrated data gives slope **0.971**, intercept
-  **0.014**; sharpening the logits ×2 drops the slope to **0.485** (CLAUDE.md:
+  **0.014**; sharpening the logits ×2 drops the slope to **0.485** (BUILD_RULES.md:
   slope < 1 means over-confident, the usual direction for a neural network) and
   flattening ×0.5 raises it to **1.940**. `fit_temperature` returns **1.053** on
   already-calibrated logits and recovers **3.159** from 3× logits and **0.351** from
@@ -1025,7 +1025,7 @@ deployed, nothing pushed.
   reports `fov_mask`, not `focus`: zero variance is true but the actual fault is that
   there is no retina. `TODO(review)`: the four cut-points are uncalibrated and marked as
   such in the module.
-- **a new library gotcha, not in CLAUDE.md:** `SVC(probability=True)` is **deprecated in
+- **a new library gotcha, not in BUILD_RULES.md:** `SVC(probability=True)` is **deprecated in
   scikit-learn 1.9 and removed in 1.11** — it emits a FutureWarning now and would be a
   hard failure on the next bump. Replaced with
   `CalibratedClassifierCV(SVC(), ensemble=False, method="sigmoid")`, which is the same
@@ -1100,19 +1100,19 @@ deployed, nothing pushed.
   argument — so callers must check for nan rather than trust the parameter.
 - verified: **236 tests pass** (209 before, +27), ruff clean on this lane's files.
 
-### 2026-10-28 — Lane C — Conformal abstention (MAPIE), and two corrections to CLAUDE.md
+### 2026-10-28 — Lane C — Conformal abstention (MAPIE), and two corrections to BUILD_RULES.md
 - what changed: `netra/models/abstain.py`, `tests/test_abstain.py` (30 tests).
-- **two things CLAUDE.md gets wrong about MAPIE 1.6.0, both verified against the
+- **two things BUILD_RULES.md gets wrong about MAPIE 1.6.0, both verified against the
   installed version and now pinned by tests:**
-  1. CLAUDE.md says `fit -> conformalize -> predict_set`. With `prefit=True`, calling
+  1. BUILD_RULES.md says `fit -> conformalize -> predict_set`. With `prefit=True`, calling
      `fit()` **raises**: *"The fit method must be skipped when the prefit parameter is
      set to True. Use the conformalize method directly after instanciation."* The correct
      flow is **`conformalize -> predict_set`**. A test calls `fit()` deliberately and
-     asserts the raise, so nobody "fixes" the wrapper by adding the call CLAUDE.md implies.
+     asserts the raise, so nobody "fixes" the wrapper by adding the call BUILD_RULES.md implies.
   2. `predict_set` returns a **tuple** `(point_predictions, sets)`, not a bare array.
-     CLAUDE.md's "3-D `(n, n_classes, n_levels)` bool array" describes the SECOND element;
+     BUILD_RULES.md's "3-D `(n, n_classes, n_levels)` bool array" describes the SECOND element;
      the first is a 1-D array of argmax labels. Asserted as `(10,)` and `(10, 5, 1)`
-     with `dtype == bool`. Both are CLAUDE.md edits for the team — it is a root doc.
+     with `dtype == bool`. Both are BUILD_RULES.md edits for the team — it is a root doc.
 - the abstention rule is SPEC.md §3's, and **size is not the criterion**. Parametrised in
   both directions: `{0,1}` size 2 → no abstention; `{0,3}` size 2 → abstain; `{2,3,4}`
   size 3 → **no** abstention (entirely refer, so a clear action), though `grade` stays
@@ -1187,7 +1187,7 @@ deployed, nothing pushed.
   of real calibration images, 24 positive + 24 negative. It prints, and its docstring
   states, that a human never judged these images and that any gate number measured with
   it belongs in the **synthetic table**, never pooled with real poor-quality images
-  (`.claude/rules/ml.md`). Without any head the gate refuses to produce a verdict, so
+  (`docs/rules/ml.md`). Without any head the gate refuses to produce a verdict, so
   this is what makes the end-to-end path exercisable at all.
 - **the cross-lane contract is now tested.** `thresholds.py` writes only the two-level
   subset Lane A's parser accepts, `write()` re-reads and fails rather than leaving an
@@ -1275,19 +1275,19 @@ imported read-only in cross-lane tests.
   published absolute Laplacian threshold for fundus images exists (SPEC.md §1).
 - `netra/models/fit_thresholds.py` header text — the cut-points it would write are
   provisional quantiles, not a boundary fitted against quality labels.
-- `netra/models/abstain.py` / `netra/eval/metrics.py` — see the two CLAUDE.md corrections
+- `netra/models/abstain.py` / `netra/eval/metrics.py` — see the two BUILD_RULES.md corrections
   below; those are root-doc edits for the team, not Lane C's to make.
 
 **Three documented errors found in the project's own docs, each now pinned by a test:**
-1. CLAUDE.md: MAPIE's flow is **not** `fit -> conformalize -> predict_set`. With
+1. BUILD_RULES.md: MAPIE's flow is **not** `fit -> conformalize -> predict_set`. With
    `prefit=True`, `fit()` **raises**; it is `conformalize -> predict_set`.
-2. CLAUDE.md: `predict_set` returns a **tuple** `(points, sets)`; the 3-D bool array is
+2. BUILD_RULES.md: `predict_set` returns a **tuple** `(points, sets)`; the 3-D bool array is
    the second element.
 3. A claim **I** wrote and then disproved: `labels=range(5)` does not protect kappa
    against a fold missing a grade — the constant weight factor cancels, measured
    identical (0.8571428571428572) both ways.
 
-**New library gotcha not in CLAUDE.md:** `SVC(probability=True)` is deprecated in
+**New library gotcha not in BUILD_RULES.md:** `SVC(probability=True)` is deprecated in
 scikit-learn 1.9 and **removed in 1.11**. Replaced with
 `CalibratedClassifierCV(SVC(), ensemble=False, method="sigmoid")`.
 
@@ -1326,7 +1326,7 @@ file). 219 training images cannot reach the QWK 0.88–0.92 SPEC.md §2 expects,
 full 3,662 are mounted on Kaggle. `rules.md` §6 makes a split change a stop-and-ask, so
 it was asked. Answer: extend at the same seed.
 
-**Why growing is not the re-shuffling `.claude/rules/ml.md` forbids, and how that is
+**Why growing is not the re-shuffling `docs/rules/ml.md` forbids, and how that is
 proven rather than claimed.** `assign_fold` is a pure function of `(seed, patient_id)`,
 so an image's fold does not depend on what else is in the manifest. Verified before
 writing anything: the pure function reproduces **all 366** committed assignments, and
@@ -1653,7 +1653,7 @@ are frozen with none of them grading an image.
 
 `netra/sidecar/` is a SEPARATE PROCESS, not a tenth endpoint: `GET /health`,
 `POST /gate`, bound to `127.0.0.1` only, refusing a non-loopback `Origin`. It
-uses `http.server` rather than FastAPI deliberately — CLAUDE.md asks for stdlib
+uses `http.server` rather than FastAPI deliberately — BUILD_RULES.md asks for stdlib
 over a dependency, and a sidecar that imported `netra.api` would be one
 refactor away from becoming the endpoint the design exists to avoid. The image
 arrives as a raw body, goes to a temp file because `InferenceEngine.run` takes
@@ -1723,7 +1723,7 @@ dropped. The teardown is covered statically by `eye.port.test.ts`; that is
 weaker than running it, and the live check is still owed.
 
 **The sidecar got its own tests** (`tests/test_sidecar.py`, 26) — it had none
-when it was written, which CLAUDE.md's "write the test with the code" does not
+when it was written, which BUILD_RULES.md's "write the test with the code" does not
 allow. They assert refusals and cleanup rather than verdicts: loopback-only,
 the `Origin` allowlist (`localhost.evil.com` is the one that looks local and
 is not), the temp image unlinked in a `finally` even when inference raises,

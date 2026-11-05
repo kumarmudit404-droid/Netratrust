@@ -324,7 +324,7 @@ def test_conformalizing_without_a_checkpoint_refuses(no_model_artifacts, tmp_pat
 
 
 def test_conformalisation_reads_the_calibration_split_and_only_that():
-    """`.claude/rules/ml.md` and tracker.md both name evaluation drift as the
+    """`docs/rules/ml.md` and tracker.md both name evaluation drift as the
     risk no hook catches. The split name is hard-coded; `dataset.collect`
     refuses `test` unless `allow_test=True`, which is never passed here."""
     import ast

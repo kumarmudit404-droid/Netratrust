@@ -35,7 +35,7 @@
  * the other side is a real model and can be wrong:
  *
  *  1. A `reject` carries NO prediction set and NO grade. A failed quality gate
- *     is "no result", never a negative DR result (CLAUDE.md invariant 1).
+ *     is "no result", never a negative DR result (BUILD_RULES.md invariant 1).
  *     Lane A returns 422 if a reject ever arrives carrying a set.
  *  2. A score is a scaled integer (per mille), never a float. Floats are
  *     banned from ledger payloads, and this value travels towards one.

@@ -1,6 +1,6 @@
 """RFC 8785 canonicalisation, with the two failure modes that break chains.
 
-`rfc8785` is used on BOTH write and verify (CLAUDE.md, rules.md section 4). The
+`rfc8785` is used on BOTH write and verify (BUILD_RULES.md, rules.md section 4). The
 reason is not style:
 
 1. **Floats are banned.** `rfc8785.dumps({"n": 1.0})` emits `{"n":1}` while

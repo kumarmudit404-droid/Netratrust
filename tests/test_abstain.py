@@ -94,7 +94,7 @@ def test_every_decision_carries_a_reason():
 
 
 def test_the_decision_dict_is_ledger_safe():
-    """No floats: this travels into a ledger payload (CLAUDE.md)."""
+    """No floats: this travels into a ledger payload (BUILD_RULES.md)."""
     payload = decide((0, 3), REFER).as_dict()
     assert all(not isinstance(v, float) for v in payload.values())
     assert payload["prediction_set"] == [0, 3]
@@ -191,7 +191,7 @@ def test_the_wrapper_reads_the_confidence_level_from_thresholds_yaml():
 
 
 def test_conformalize_then_predict_set_without_calling_fit():
-    """CLAUDE.md says fit -> conformalize -> predict_set. With prefit=True,
+    """BUILD_RULES.md says fit -> conformalize -> predict_set. With prefit=True,
     MAPIE 1.6.0 RAISES on fit(). This pins the corrected flow."""
     proba, labels = synthetic_proba()
     wrapper = AbstentionWrapper(PrefitProbaEstimator(5)).conformalize(
@@ -206,7 +206,7 @@ def test_conformalize_then_predict_set_without_calling_fit():
 
 def test_calling_fit_under_prefit_is_what_mapie_refuses():
     """Documents the trap directly, so nobody 'fixes' the wrapper by adding
-    the fit() call CLAUDE.md implies."""
+    the fit() call BUILD_RULES.md implies."""
     from mapie.classification import SplitConformalClassifier
 
     proba, labels = synthetic_proba(n=50)
@@ -221,7 +221,7 @@ def test_calling_fit_under_prefit_is_what_mapie_refuses():
 
 
 def test_predict_set_returns_a_tuple_whose_second_element_is_3d():
-    """CLAUDE.md describes a 3-D bool array; it is the SECOND element of a
+    """BUILD_RULES.md describes a 3-D bool array; it is the SECOND element of a
     tuple, not the return value."""
     from mapie.classification import SplitConformalClassifier
 

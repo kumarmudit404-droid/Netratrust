@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="160" alt="NetraTrust"></p>
+
 # NetraTrust
 
 **Offline-first diabetic retinopathy screening that knows when *not* to answer.**
@@ -140,14 +142,6 @@ pytest -q                 # backend + ML
 cd netra/ui && npm test    # frontend
 npm run build              # production build check
 ```
-
-## What this project does *not* claim
-
-- No improvement in clinical outcomes over existing screening tools.
-- No claim of superiority to any commercial or published DR algorithm.
-- The DR classifier itself is not the contribution — the quality gate,
-  the conformal abstention, the reliability monitoring, and the
-  tamper-evident ledger around it are.
 
 ## License
 

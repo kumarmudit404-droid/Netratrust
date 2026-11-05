@@ -2,7 +2,7 @@
 
 `append` runs inside the CALLER's transaction and does not commit. That is what
 makes "every decision is appended to the ledger before it is returned to the
-caller" (CLAUDE.md, rules.md section 4.3) true rather than aspirational: the
+caller" (BUILD_RULES.md, rules.md section 4.3) true rather than aspirational: the
 encounter row and its ledger entry commit together or not at all, so no
 response can describe a decision that is missing from the ledger.
 """

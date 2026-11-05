@@ -30,7 +30,7 @@ BACKGROUND_CUTOFF = 10
 class CropReport:
     """What the crop did, so the retained fraction can be reported out loud.
 
-    `.claude/rules/ml.md` requires the retained fraction at every filtering
+    `docs/rules/ml.md` requires the retained fraction at every filtering
     step: "reasonable" preprocessing has been documented to silently discard
     80-94% of public corpora.
     """

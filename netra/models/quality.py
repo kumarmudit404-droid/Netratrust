@@ -69,7 +69,7 @@ class GateResult:
     verdict: str | None
     #: P(usable) as a scaled integer in 0..1000. Integers, not floats: this
     #: value travels into a ledger payload and floats are banned there
-    #: (CLAUDE.md). None when no head was available.
+    #: (BUILD_RULES.md). None when no head was available.
     score_milli: int | None
     #: The classical reason code: focus | exposure | fov_mask, or None.
     cause: str | None

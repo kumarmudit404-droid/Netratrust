@@ -26,7 +26,7 @@ look good:
 | site-12 | 12  | **n < 30** - the no-bare-percentage rule fires here    |
 | site-21 | 31  | drift flagged, so the audit FAILS and stays unpinned   |
 
-site-12 is deliberately under the floor. CLAUDE.md forbids a bare percentage
+site-12 is deliberately under the floor. BUILD_RULES.md forbids a bare percentage
 for n < 30, and a demo where every site clears the floor never shows the rule
 working.
 

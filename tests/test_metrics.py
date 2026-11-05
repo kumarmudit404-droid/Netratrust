@@ -32,7 +32,7 @@ def test_brier_is_worst_when_confidently_wrong():
 
 
 def test_brier_uses_the_y_proba_keyword_not_y_prob():
-    """CLAUDE.md: `y_prob=` raises TypeError in scikit-learn 1.9.1.
+    """BUILD_RULES.md: `y_prob=` raises TypeError in scikit-learn 1.9.1.
 
     Assistants trained on older versions emit the old keyword confidently, so
     the wrapper's job is to be the only place that keyword is written.
@@ -63,7 +63,7 @@ def test_nll_accepts_explicit_labels_for_a_single_class_slice():
 
 
 def test_nll_and_brier_are_both_minimised_by_the_truth():
-    """Both are strictly proper, which is why CLAUDE.md leads with them."""
+    """Both are strictly proper, which is why BUILD_RULES.md leads with them."""
     y = np.array([0, 0, 1, 1, 1])
     truth = np.array([0.0, 0.0, 1.0, 1.0, 1.0])
     for shifted in (0.2, 0.4):
@@ -88,7 +88,7 @@ def test_calibration_slope_is_one_and_intercept_zero_when_calibrated():
 
 
 def test_calibration_slope_falls_below_one_when_over_confident():
-    """CLAUDE.md: slope < 1 means over-confident, the usual direction for a
+    """BUILD_RULES.md: slope < 1 means over-confident, the usual direction for a
     neural network. Sharpening the logits must move it that way."""
     y, _ = _calibrated()
     _, p_sharp = _calibrated(scale=2.0)

@@ -1,6 +1,6 @@
 """How the frozen splits are MADE. `netra/models/dataset.py` is how they are read.
 
-`.claude/rules/ml.md` says the splits are frozen and committed, never
+`docs/rules/ml.md` says the splits are frozen and committed, never
 regenerated and never re-shuffled. That rule is about not moving an image
 between folds; it is not a rule against the corpus growing. The distinction
 matters, so it is spelled out here and enforced by `check_preserved()`:
@@ -144,13 +144,13 @@ def read_aptos_labels(path: pathlib.Path) -> tuple[list[dict[str, str]], dict]:
 
     **APTOS publishes no patient identifier.** It ships `id_code, diagnosis`
     and nothing else, so `patient_id` is set to the image id. That makes the
-    patient-level guarantee in `.claude/rules/ml.md` VACUOUS for this corpus:
+    patient-level guarantee in `docs/rules/ml.md` VACUOUS for this corpus:
     the splitter cannot keep a patient's images together because it cannot tell
     which images share a patient. Recorded rather than papered over. A corpus
     that does publish patient ids (IDRiD, EyePACS) must pass the real one.
 
     Returns `(rows, report)`; the report carries the retained fraction, per
-    `.claude/rules/ml.md`.
+    `docs/rules/ml.md`.
     """
     path = pathlib.Path(path)
     with path.open(newline="", encoding="utf-8") as fh:

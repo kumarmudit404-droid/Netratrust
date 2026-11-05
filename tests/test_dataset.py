@@ -131,7 +131,7 @@ def test_find_images_dir_skips_checkpoint_and_cache_directories(tmp_path):
 
 
 def test_collect_still_refuses_the_test_split_without_the_explicit_flag(tmp_path):
-    """`.claude/rules/ml.md`: touched exactly once, at the end."""
+    """`docs/rules/ml.md`: touched exactly once, at the end."""
     write_split(tmp_path / "splits", "test", ["img0"])
     with pytest.raises(PermissionError, match="exactly once"):
         dataset.collect("test", tmp_path / "images", splits_dir=tmp_path / "splits")
