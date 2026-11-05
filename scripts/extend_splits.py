@@ -36,8 +36,7 @@ import json
 import pathlib
 import sys
 
-# `scripts/` is not a package and this file imports `netra`, so the repo root
-# has to be on sys.path when it is run directly as `python scripts/...`.
+# Same sys.path fix as the other scripts in here; `scripts/` is not a package.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from netra.models.splits import (

@@ -21,8 +21,7 @@ import argparse
 import pathlib
 import sys
 
-# `scripts/` is not a package and this file imports `netra`, so the repo root
-# has to be on sys.path when it is run directly as `python scripts/...`.
+# Run directly as `python scripts/...`, so the repo root is not on sys.path yet.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from netra.models.splits import (

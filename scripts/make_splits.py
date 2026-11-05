@@ -1,8 +1,9 @@
 """Freeze the train/calibration/test splits. Run ONCE, commit the output.
 
-This is the highest-leverage hour of the whole build. Patient-level duplication
-across splits is the most common and most fatal error in this literature, and
-it is invisible in the results - it just makes everything look better.
+Patient-level duplication across splits is the most common and most fatal
+error in this literature, and it is invisible in the results - it just makes
+everything look better. That is why this is a separate frozen step and not
+something the training code does for itself.
 
 Usage:
     python scripts/make_splits.py --manifest data/manifest.csv --out data/splits

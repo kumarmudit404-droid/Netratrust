@@ -32,7 +32,8 @@ export default defineConfig({
       },
       workbox: {
         // Cache the app shell so a camp device keeps working with no network.
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // jpg: the screening shell's background image (public/images).
+        globPatterns: ["**/*.{js,css,html,svg,png,jpg,woff2}"],
         // NEVER cache clinical API traffic: a stale verdict or ledger state is
         // worse than no answer. Writes queue in the app, not in the SW cache.
         navigateFallbackDenylist: [/^\/v1\//],

@@ -51,6 +51,19 @@ function lightTokens(): Record<string, string> {
   return out
 }
 
+/** Tokens the screening shell re-points for its dark background, from the
+ *  `.screening-bg { ... }` block. Same extraction as `lightTokens`, aimed at
+ *  a different selector. */
+function screeningDarkTokens(): Record<string, string> {
+  const block = CSS.slice(CSS.indexOf(".screening-bg {"))
+  const body = block.slice(0, block.indexOf("}"))
+  const out: Record<string, string> = {}
+  for (const [, name, hex] of body.matchAll(/(--[a-z-]+):\s*(#[0-9a-fA-F]{6})/g)) {
+    out[name] = hex
+  }
+  return out
+}
+
 function channel(v: number): number {
   const s = v / 255
   return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
@@ -71,6 +84,7 @@ function ratio(a: string, b: string): number {
 }
 
 const tokens = lightTokens()
+const darkTokens = screeningDarkTokens()
 
 /** Colours this app paints TEXT and icons with. `--border-subtle` is excluded
  *  deliberately: index.css marks it decorative and it must never carry text. */
@@ -102,6 +116,24 @@ describe.each(["--bg", "--surface"])("AA on %s", (surface) => {
     expect(
       Math.round(r * 100) / 100,
       `${token} on ${surface} measured ${r.toFixed(2)}:1`,
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+})
+
+describe("the screening shell's dark background (.screening-bg)", () => {
+  it("found every token it re-points", () => {
+    for (const t of [...TEXT_TOKENS, "--bg", "--surface", "--border-subtle"]) {
+      expect(darkTokens[t], `${t} missing from .screening-bg`).toMatch(/^#[0-9a-f]{6}$/i)
+    }
+  })
+})
+
+describe.each(["--bg", "--surface"])("AA on screening-dark %s", (surface) => {
+  it.each(TEXT_TOKENS)(`%s clears ${AA_NORMAL}:1`, (token) => {
+    const r = ratio(darkTokens[token], darkTokens[surface])
+    expect(
+      Math.round(r * 100) / 100,
+      `${token} on .screening-bg ${surface} measured ${r.toFixed(2)}:1`,
     ).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 })

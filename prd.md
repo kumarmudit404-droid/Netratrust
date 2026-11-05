@@ -4,17 +4,6 @@
 > document and `SPEC.md` disagree, `SPEC.md` wins. Facts not present in those files
 > are marked **TBD — verify**. Ownership is by lane, not by person.
 
-## Table of contents
-1. [Problem statement](#1-problem-statement)
-2. [Target users](#2-target-users)
-3. [The claim we prove](#3-the-claim-we-prove)
-4. [Core features](#4-core-features)
-5. [Functional requirements](#5-functional-requirements)
-6. [Non-functional requirements](#6-non-functional-requirements)
-7. [Non-goals](#7-non-goals)
-8. [Success metrics](#8-success-metrics)
-9. [Open questions](#9-open-questions)
-
 ## 1. Problem statement
 Diabetic-retinopathy (DR) screening programs lose most of their value at two points
 that automated accuracy metrics hide:

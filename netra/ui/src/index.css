@@ -78,12 +78,37 @@
   }
 }
 
-/* The five screening screens' page background, lifted verbatim from the
-   landing's default porcelain gradient (src/landing.css body.landing-active,
-   line 38) so "/" and the screening shell read as one product. Background
-   only: cards still sit on --surface, so text contrast is unaffected. */
+/* The five screening screens' page background: a dark steampunk image
+   (medical cross + gears on a blue-teal gradient, public/images/screening-bg.jpg),
+   fixed and full-bleed behind Capture/Grade/Referrals/Sites/Ledger only. "/"
+   never mounts this class and keeps its own porcelain background.
+   Because the image is dark, --bg/--surface/--text/--text-muted/
+   --border-subtle and the status hues are re-pointed here to dark-safe
+   values. Every component already reads these through a `var(--x)` or a
+   `text-x`/`bg-x`/`border-x` Tailwind utility (never a hard-coded hex - see
+   tailwind.config.ts), so the CSS cascade alone carries the new colours into
+   TopNav, StatusBadge, ForestPlot etc. with no component edits.
+   This is the "status hues don't survive the flip" gap the root dark-theme
+   block above calls TBD; these are the measured replacements, scoped to this
+   selector only - the root dark-mode block itself is untouched.
+   AA is asserted in contrast.test.ts under a dedicated ".screening-bg" block,
+   parallel to the existing light-theme checks. */
 .screening-bg {
-  background: radial-gradient(ellipse at 50% 42%, #fffef5 0%, #fff4d9 38%, #f1e5c7 70%, #e8d9b9 100%) fixed;
+  --bg: #0d1920;
+  --surface: #15232b;
+  --text: #f5f8fa;
+  --text-muted: #b9c7ce;
+  --usable: #34c97a;
+  --borderline: #f0b04a;
+  --reject: #ff7a6e;
+  --abstain: #a593f5;
+  --border-subtle: #2d4654;
+  background-color: var(--bg);
+  background-image: url("/images/screening-bg.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  color: var(--text);
 }
 
 /* All motion respects the user's reduced-motion preference (design.md s8). */

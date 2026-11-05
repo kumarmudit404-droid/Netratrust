@@ -38,8 +38,7 @@ import sys
 
 import numpy as np
 
-# `scripts/` is not a package and this file imports `netra`, so the repo root
-# has to be on sys.path when it is run directly as `python scripts/...`.
+# `scripts/` is not a package, so the repo root has to go on sys.path.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from netra.models.dataset import collect

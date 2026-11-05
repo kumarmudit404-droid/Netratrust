@@ -6,14 +6,6 @@
 > **`SPEC.md` wins** and this file is what gets fixed. Rules already enforced elsewhere
 > are referenced here, not restated.
 
-## Table of contents
-1. [Dependencies](#1-dependencies)
-2. [Do not break existing APIs](#2-do-not-break-existing-apis)
-3. [Test after every change](#3-test-after-every-change)
-4. [Clinical invariants](#4-clinical-invariants)
-5. [Lane discipline](#5-lane-discipline)
-6. [When to stop and ask](#6-when-to-stop-and-ask)
-
 ## 1. Dependencies
 - **No unnecessary dependencies.** Use only what is pinned in `requirements.txt`.
 - **Banned, with reason:** `alibi-detect`, `sdv` (BUSL-1.1 licence); `puncc`
